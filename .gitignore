@@ -1,0 +1,6 @@
+/bin
+/obj
+/work
+/src/gfx/*.c
+/src/gfx/*.h
+/src/gfx/*.log
