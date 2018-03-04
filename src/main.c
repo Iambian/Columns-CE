@@ -57,6 +57,8 @@
 void keywait() { while (kb_AnyKey()); }
 void waitanykey() {	keywait(); 	while (!kb_AnyKey()); keywait(); }
 /* Put your function prototypes here */
+void gentriad(uint8_t maxtypes);
+void exchtriad(uint8_t x_left,uint8_t y_top); //exchanges to the right
 
 #include "gfx/tiles_gfx.h"   //gems_tiles_compressed, explosion_tiles_compressed
 #include "gfx/sprites_gfx.h" //cursor_compressed, grid_compressed
@@ -109,22 +111,33 @@ void main(void) {
 	curfall = 0;
 	falldelay = 45; //1.5x maxfall
 	max_blocktypes = 6;  //All six gems. Modes changeable from 4 to 6.
-	grid[0+12] = GRID_GEM1 | GRID_OBJ_CHANGE_MASK;
-	grid[1+12] = GRID_GEM2 | GRID_OBJ_CHANGE_MASK;
-	grid[2+12] = GRID_GEM3 | GRID_OBJ_CHANGE_MASK;
-	grid[3+12] = GRID_GEM4 | GRID_OBJ_CHANGE_MASK;
-	grid[4+12] = GRID_GEM5 | GRID_OBJ_CHANGE_MASK;
-	grid[5+12] = GRID_GEM6 | GRID_OBJ_CHANGE_MASK;
-	dbg_sprintf(dbgout,"RAWRLOOPS\n");
+	triadx = 2;
+	triady = 0;
+	gentriad(max_blocktypes);
 	
 	while (1) {
 		kb_Scan();
 		kc = kb_Data[1];
 		kd = kb_Data[7];
 		//BEGIN TEST MODE
+		//Move triad
+		t = triadx+triady*GRID_W+(GRID_W*2-1); //left side of block
+		if (kd&kb_Left && triadx && !(grid[t]&(~GRID_OBJ_CHANGE_MASK))) {
+			exchtriad(triadx-1,triady);
+			triadx--;
+		}
+		t+=2;  //right side of block
+		if (kd&kb_Right && triadx<5 && !(grid[t]&(~GRID_OBJ_CHANGE_MASK))) {
+			exchtriad(triadx,triady);
+			triadx++;
+		}
+		if (kd&kb_Down && curfall > 1) curfall = 1;
 		//Check for timed falling
 		if (!curfall) {
-			//Check if current triad can fall. If so, then decrement triady
+			//Check if current triad can fall. If so, then increment triady
+			if (triady<(GRID_H-3) && !(grid[triadx+triady*GRID_W+(GRID_W*3)]&~(GRID_OBJ_CHANGE_MASK))) {
+				triady++;
+			}
 			for (i = GRID_SIZE-GRID_W;i;) {
 				i--;
 				if (grid[i] && !(grid[i+GRID_W]&(~GRID_OBJ_CHANGE_MASK))) {
@@ -140,9 +153,7 @@ void main(void) {
 		if (!falldelay) {
 			triadx = 2;
 			triady = 0;
-			for (t=2,i=0;i<3;i++,t+=GRID_W) { 
-				grid[t] = GRID_GEM1+(randInt(0,max_blocktypes-1)|GRID_OBJ_CHANGE_MASK);
-			}
+			gentriad(max_blocktypes);
 			falldelay = (maxfall>>1) + maxfall;
 		} else {
 			t = 0;
@@ -181,3 +192,19 @@ void main(void) {
 }
 
 /* Put other functions here */
+void gentriad(uint8_t maxtypes) {
+	uint8_t i,t;
+	for (t=2,i=0;i<3;i++,t+=GRID_W) { 
+		grid[t] = GRID_GEM1+(randInt(0,maxtypes-1)|GRID_OBJ_CHANGE_MASK);
+	}
+}
+
+void exchtriad(uint8_t x_left,uint8_t y_top) {
+	uint8_t i,t,blk;
+	t =  x_left+y_top*GRID_W;
+	for (i=0;i<3;i++,t+=GRID_W) {
+		blk = grid[t]|GRID_OBJ_CHANGE_MASK;
+		grid[t] = grid[t+1]|GRID_OBJ_CHANGE_MASK;
+		grid[t+1] = blk;
+	}
+}
