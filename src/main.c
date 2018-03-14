@@ -95,6 +95,8 @@ typedef struct entity_t {
 	uint8_t drop_speed;    //Cycles to delay
 	uint8_t drop_max;      //Maximum speed to drop at. Decided by level
 	uint8_t max_types;     //3,4,5
+	unsigned int scoreadd; //Increase score by 1/16 of this much
+	uint8_t scorecycle;    //Loop from 16 to 1. Final score on 1. Inactive on 0.
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
 	uint8_t grid[GRID_SIZE];  //Gem/explosion IDs
@@ -117,21 +119,12 @@ typedef struct options_t {
 	
 	
 
-enum GameState {GM_TITLE=0,GM_MAINMENU,
-				GM_ARCADEOPTIONS, //This is an in-field menu
-				GM_GAMEMENU,GM_GAMEOPTIONS,GM_GAMEPREVIEW,
-				GM_PLAYSTART,GM_PLAYMATCH,GM_PLAYMOVE,  //Used in gameplay only
-				GM_OPTIONS};
-enum GameType { TYPE_ARCADE = 0, TYPE_ORIGINAL, TYPE_FLASH };
-enum Players {PLAYER1 = 0, PLAYER2, DOUBLES };
-enum Difficulty { NOVICE = 0, AMATEUR, PRO };
-
 void keywait(void) { while (kb_AnyKey()); }
 void waitanykey(void) {	keywait(); 	while (!kb_AnyKey()); keywait(); }
 /* Put your function prototypes here */
 void initgfx(void);
 void initgamestate(options_t *options);
-void gentriad(entity_t entity);
+void gentriad(entity_t *entity);
 void rungame(options_t *options);
 void redrawboard(options_t *options);
 
@@ -184,46 +177,10 @@ void main(void) {
 	
 	keywait();
 	gfx_End();
-	}
 }
 
 
 
-void redrawgrid(uint8_t *gridvar, int gridstart_x, int gridstart_y) {
-	uint8_t i,gx,gy,y,t;
-	int x;
-	for (i=GRID_START,y=gridstart_y,gy=GRID_HSTART;gy<GRID_H;y+=16,gy++) {
-		for (x=gridstart_x,gx=0;gx<GRID_W;x+=16,gx++) {
-			t = grid[i];
-			if (t & GRID_OBJ_CHANGE_MASK) {
-				t = t & (~GRID_OBJ_CHANGE_MASK);
-				gfx_Sprite_NoClip(grid_spr,x,y);
-				if (t>=GRID_GEM1 && t<=GRID_GEM6) {
-					gfx_RLETSprite_NoClip(gems_spr[t-GRID_GEM1],x,y);
-				} else if (t>=GRID_EXP1 && t<=GRID_EXP7) {
-					gfx_RLETSprite_NoClip(explosion_spr[t-GRID_EXP1],x,y);
-				} else {
-					//bork bork borked.
-				}
-				grid[i] = t;
-			}
-			i++;
-		}
-	}
-	//Clear all changes in nonvisible area of board:
-	for (i=0;i<(GRID_W*GRID_HSTART);i++) grid[i] = grid[i]&(~GRID_OBJ_CHANGE_MASK);	
-}
-
-void gridfall(uint8_t *gridvar) {
-	uint8_t i;
-	for (i = GRID_SIZE-GRID_W;i;) {
-		i--;
-		if (grid[i] && !(grid[i+GRID_W]&(~GRID_OBJ_CHANGE_MASK))) {
-			grid[i+GRID_W] = grid[i] | GRID_OBJ_CHANGE_MASK;
-			grid[i] = GRID_EMPTY | GRID_OBJ_CHANGE_MASK;
-		}
-	}
-}
 //On intializing a search, ignore re-matched (changed) bit only for initial
 //but do direct match against masked initial for all else on the chain
 //Re-using GRID_OBJ_CHANGE_MASK for matched objects
@@ -330,8 +287,8 @@ void initgamestate(options_t *options) {
 		player2.level = options->p2_level;
 	}
 	//Set up dgrid to force initial render
-	memset(player1->dgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
-	memset(player2->dgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
+	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
+	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 }
 
 
@@ -344,43 +301,57 @@ void gentriad(entity_t *entity) {
 void rungame(options_t *options) {
 	uint8_t i;
 	uint8_t timer_p1,timer_p2;
+	kb_key_t kd,kc;
+	uint8_t *ptr;
+	int longctr;
 	
 	//Generate game static background
+	ptr = (uint8_t*)0xD40000;
+	for(longctr = 320*240*2; longctr; --longctr, ptr++) *ptr = 0x09;
+	//End generate game static background
 	
-	
-	
-	
-	
-	
-	
-	
+	while (1) {
+		kb_Scan();
+		kc = kb_Data[1];
+		kd = kb_Data[7];
+		
+		if (kc&kb_Mode) { keywait(); ;return; }
+		
+		
+		
+		
+		redrawboard(options);
+		gfx_SwapDraw();
+	}
 }
 
 //Draw if any of the flags were set, but clear only mask_buf flag from dgrid
-void drawgrid(entity_t *e,uint8_t mask_buf, uint8_t mask_scr) {
+void drawgrid(entity_t *e,uint8_t mask_buf) {
 	uint8_t tilestate,tileid,grididx,gridx,gridy,y;
 	unsigned int x;
 	
-	screeny = e->grid_top;
+	y = e->grid_top;
 	grididx = GRID_START;
 	for (gridy = GRID_HSTART; gridy < GRID_H; gridy++) {
 		x = e->grid_left;
 		for (gridx = 0 ; gridx < GRID_W; gridx++) {
-			tilestate = e->dgrid[grididx];
+			tilestate = e->cgrid[grididx];
 			if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING)) {
 				tilestate &= ~mask_buf; //Acknowledge render
 				gfx_Sprite_NoClip(grid_spr,x,y);
 				tileid = e->grid[grididx];
 				if (tileid >= GRID_EXP1 && tileid <= GRID_EXP7) {
-					gfx_TransparentSprite_NoClip(explosion_spr[GRID_EXP1-tileid],x,y);
+					gfx_TransparentSprite_NoClip((gfx_sprite_t*)explosion_spr[GRID_EXP1-tileid],x,y);
 					if (++tileid >GRID_EXP7) tileid = GRID_EMPTY;
 					tilestate |= mask_buf; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
 					if (!(tilestate&TILE_FLASHING) || main_timer&1) {
-						gfx_TransparentSprite(gems_spr[GRID_GEM1-tileid],x,y);
+						gfx_TransparentSprite((gfx_sprite_t*)gems_spr[GRID_GEM1-tileid],x,y);
 					}
 				}
+				e->grid[grididx] = tileid;
 			}
+			e->cgrid[grididx] = tilestate;
 			x += TILE_W;
 			grididx++;
 		}
@@ -399,9 +370,12 @@ void redrawboard(options_t *options) {
 		mask_scr = CHANGE_BUF1;
 	}
 	
+	drawgrid(&player1,mask_buf);
+	if (options->players == PLAYER2) drawgrid(&player2,mask_buf);
 	
-	
-	
+	// Put code here which handles the scoreboard depending on the game type
+	// and who's got the score.
+	//
 	
 	curbuf = !curbuf;
 }
