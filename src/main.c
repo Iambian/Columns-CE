@@ -12,12 +12,13 @@
 enum GameState {GM_TITLE=0,GM_MAINMENU,
 				GM_ARCADEOPTIONS, //This is an in-field menu
 				GM_GAMEMENU,GM_GAMEOPTIONS,GM_GAMEPREVIEW,
-				GM_PLAYSTART,GM_PLAYMATCH,GM_PLAYMOVE,  //Used in gameplay only
+				GM_PLAYSTART,GM_PLAYMATCH,GM_PLAYMOVE, GM_GAMEOVER,
 				GM_OPTIONS};
 enum GameType { TYPE_ARCADE = 0, TYPE_ORIGINAL, TYPE_FLASH };
 enum Players {PLAYER1 = 0, PLAYER2, DOUBLES };
 enum Difficulty { NOVICE = 3, AMATEUR, PRO,
 				  EASIEST, EASY, NORMAL, HARD};
+enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 
 
 #define TRANSPARENT_COLOR 0xF8
@@ -31,12 +32,16 @@ enum Difficulty { NOVICE = 3, AMATEUR, PRO,
 #define GRID_SIZE GRID_W*GRID_H
 #define TILE_W 16
 #define TILE_H 16
+#define GRID_TBTM (GRID_SIZE-(GRID_W*3))
+#define GRID_BELOW (GRID_W*3)
 
-#define GRID_OBJ_CHANGE_MASK 0x80
+#define MATCH_TIMEOUT 30
+
 #define CHANGE_BUF1 (1<<7)
 #define CHANGE_BUF2 (1<<6)
 #define TILE_FLASHING (1<<5)
-#define TILE_HALFLINGS
+#define TILE_HALFLINGS (1<<4)
+#define TILE_TARGET_GEM (1<<3)
 
 #define P1_GRIDLEFT 16
 #define P2_GRIDLEFT 208
@@ -92,11 +97,12 @@ typedef struct entity_t {
 	uint8_t combo;         //Player's current combo
 	uint8_t matches;       //9 match cycles (matchlen not considered) is level++
 	enum GameState state;  //GM_PLAYMATCH or GM_PLAYMOVE
-	uint8_t drop_speed;    //Cycles to delay
+	uint8_t cur_delay;     //Unified delay cycles
 	uint8_t drop_max;      //Maximum speed to drop at. Decided by level
 	uint8_t max_types;     //3,4,5
 	unsigned int scoreadd; //Increase score by 1/16 of this much
 	uint8_t scorecycle;    //Loop from 16 to 1. Final score on 1. Inactive on 0.
+	uint8_t stay_delay;    //from MATCH_TIMEOUT to 0 once triad rests on surface
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
 	uint8_t grid[GRID_SIZE];  //Gem/explosion IDs
@@ -127,14 +133,9 @@ void initgamestate(options_t *options);
 void gentriad(entity_t *entity);
 void rungame(options_t *options);
 void redrawboard(options_t *options);
+void falldown(entity_t *e);
+void movedir(entity_t *e, enum Direction dir);
 
-
-
-
-void exchtriad(uint8_t x_left,uint8_t y_top); //exchanges to the right
-void redrawgrid(uint8_t *gridvar, int gridstart_x, int gridstart_y);
-void gridfall(uint8_t *gridvar);
-uint8_t markmatches(uint8_t *gridvar, uint8_t *dgridvar);
 
 
 #include "gfx/tiles_gfx.h"   //gems_tiles_compressed, explosion_tiles_compressed
@@ -180,48 +181,6 @@ void main(void) {
 }
 
 
-
-//On intializing a search, ignore re-matched (changed) bit only for initial
-//but do direct match against masked initial for all else on the chain
-//Re-using GRID_OBJ_CHANGE_MASK for matched objects
-
-uint8_t markmatches(uint8_t *gridvar,uint8_t *dgridvar) {
-	uint8_t i,t,k,x,y,gx,gy,tx,ty,ti,ct;
-	
-	for (i=y=0;y<(GRID_H-3);y++) {
-		for(x=0;x<GRID_W;x++,i++) {
-			//Get current gem or skip iteration if not a gem
-			t = gridvar[i]&(~GRID_OBJ_CHANGE_MASK);
-			if (t == GRID_EMPTY || t >= GRID_EXP1) continue;
-			//Matching to the right
-			tx = x;
-			ti = i;
-			ct = 0;
-			while (++tx<GRID_W) {
-				ti++;
-				if (gridvar[ti]!=t) break;
-				ct++;
-			}
-			if (ct>2) {
-				tx=x;ti=i;
-				while (++tx<GRID_W) {
-					ti++;
-					if (gridvar[ti]!=t) break;
-					gridvar[ti] = gridvar[ti]|GRID_OBJ_CHANGE_MASK;
-				}
-			}
-			//Matching to the bottom-right
-			
-		}
-	}
-	for (ct=i=0;i<GRID_SIZE;i++) {
-		if (GRID_OBJ_CHANGE_MASK&gridvar[i]) {
-			ct++;
-			dgridvar[i] = 1;
-		} else dgridvar[i] = 0;
-	}
-	return ct;
-}
 
 /* ========================================================================== */
 
@@ -289,17 +248,19 @@ void initgamestate(options_t *options) {
 	//Set up dgrid to force initial render
 	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
+	//Set initial delay cycles
+	player1.cur_delay = player2.cur_delay = MATCH_TIMEOUT;
 }
 
 
 void gentriad(entity_t *entity) {
-	uint8_t *triad,i;
+	uint8_t *triad,i,t;
 	triad = entity->next_triad;
 	for (i=0;i<3;i++,triad++) *triad = GRID_GEM1 + randInt(0,entity->max_types);
 }
 
 void rungame(options_t *options) {
-	uint8_t i;
+	uint8_t i,t,idx;
 	uint8_t timer_p1,timer_p2;
 	kb_key_t kd,kc;
 	uint8_t *ptr;
@@ -308,6 +269,7 @@ void rungame(options_t *options) {
 	//Generate game static background
 	ptr = (uint8_t*)0xD40000;
 	for(longctr = 320*240*2; longctr; --longctr, ptr++) *ptr = 0x09;
+	for(i=0;i<2;++i) { redrawboard(options); gfx_SwapDraw(); }
 	//End generate game static background
 	
 	while (1) {
@@ -315,10 +277,65 @@ void rungame(options_t *options) {
 		kc = kb_Data[1];
 		kd = kb_Data[7];
 		
-		if (kc&kb_Mode) { keywait(); ;return; }
+		if (kc&kb_Mode) { keywait(); ;return; } //For now, exit game immediately
 		
+		if (player1.state == GM_PLAYSTART) {
+			
+			
+		} else if (player1.state == GM_PLAYMATCH) {
+			falldown(&player1);
+			//Check if there has been any change in the visible grid.
+			for (i=GRID_START,t=0;i<GRID_SIZE;++i) {
+				t |= player1.cgrid[i] & (CHANGE_BUF1|CHANGE_BUF2);
+			}
+			if (t) player1.cur_delay = MATCH_TIMEOUT; //And reset timeout if change.
+			//Check for matches, update grid for match anim, and update score
+			//
+			//If match timed out, proceed to place new triad.
+			if (!--(player1.cur_delay)) {
+				t = (player1.playerid==PLAYER1) ? 2 : 3;
+				for (i=0;i<3;++i,t+=GRID_W) {
+					player1.grid[t] = player1.next_triad[i];
+					player1.cgrid[t] = CHANGE_BUF1|CHANGE_BUF2;
+					player1.next_triad[i] = 0;
+				}
+				player1.cur_delay = player1.drop_max;
+				player1.state = GM_PLAYMOVE;
+			}
+			
+		} else if (player1.state == GM_PLAYMOVE) {
+			//If push down, speed things up everywhere.
+			if (kd&kb_Down) {
+				player1.stay_delay = 1;
+				player1.cur_delay = 1;
+			}
+			idx = player1.triad_idx;
+			//Check if the spot below triad is empty or not on bottom row.
+			if (player1.grid[idx+(GRID_W*3)] == GRID_EMPTY && idx<GRID_TBTM) {
+				//If empty, reset stay_delay and check cur_delay if need to fall
+				player1.stay_delay = MATCH_TIMEOUT;
+				if (!--(player1.cur_delay)) {
+					falldown(&player1);
+					player1.cur_delay = player1.drop_max;
+				}
+			} else {
+				player1.cur_delay = 1; //Make sure delay hovers at 1 in case
+				//Check to see if we didn't stop past the top. If so, game over.
+				if (idx<GRID_W*2) {
+					player1.state = GM_GAMEOVER;
+					continue;
+				}
+				//If not empty, make sure stay_delay is nonzero else do matching
+				if (!--(player1.stay_delay)) {
+					player1.cur_delay = MATCH_TIMEOUT;
+					player1.state = GM_PLAYMATCH;
+					continue;
+				}
+			}
+		} else if (player1.state == GM_GAMEOVER) {
+			break;  //For now, exit game
 		
-		
+		} else break; //Illegal value - stop playing the game
 		
 		redrawboard(options);
 		gfx_SwapDraw();
@@ -379,6 +396,51 @@ void redrawboard(options_t *options) {
 	
 	curbuf = !curbuf;
 }
+
+//Known problem: Does not properly transfer grid properties on falldown.
+//This problem affects TILE_TARGET_GEM in Flash Columns mode if the target is
+//not on the bottom row. We should also implement half drop support eventually.
+void falldown(entity_t *e) {
+	uint8_t i;
+	for (i=GRID_SIZE-1;i>GRID_W;--i) {
+		if (e->grid[i] == GRID_EMPTY && e->grid[i-GRID_W] != GRID_EMPTY) {
+			e->grid[i] = e->grid[i-GRID_W];
+			e->grid[i-GRID_W] = GRID_EMPTY;
+			e->cgrid[i] |= CHANGE_BUF1|CHANGE_BUF1;
+			e->cgrid[i-GRID_W] |= CHANGE_BUF1|CHANGE_BUF1;
+		}
+	}
+	if (e->triad_idx<GRID_TBTM && e->cgrid[i+GRID_BELOW]!=GRID_EMPTY) {
+		e->triad_idx += GRID_W;
+	}
+}
+
+void movedir(entity_t *e, enum Direction dir) {
+	int8_t i,idx,oldidx,temp;
+	//Move idx to left or right if we aren't on a field boundary
+	oldidx = idx = e->triad_idx;
+	if ((dir<0 && !(idx%GRID_W)) || (dir>0 && !((idx-1)%GRID_W))) {
+		i =+ dir;
+	}
+	//Do not change anything else if we tried to move on top of something else.
+	if (e->grid[idx+(GRID_W*2)] != GRID_EMPTY) return;
+	//Begin exchanging.
+	e->triad_idx = idx;
+	for (i=0;i<3;++i) {
+		temp = e->grid[idx];
+		e->grid[idx] = e->grid[oldidx];
+		e->grid[oldidx] = temp;
+		temp = e->cgrid[oldidx];
+		e->cgrid[oldidx] = e->cgrid[idx] | CHANGE_BUF1 | CHANGE_BUF2;
+		e->cgrid[idx] = temp | CHANGE_BUF1 | CHANGE_BUF2;
+		idx += GRID_W;
+		oldidx += GRID_W;
+	}
+	//If temp has the TILE_HALFLINGS flag set, force the tile below that to
+	//update if idx is not past the bottom of the screen
+	if (idx<GRID_SIZE) e->cgrid[idx] |= CHANGE_BUF1 | CHANGE_BUF2;
+}
+
 
 
 
