@@ -35,7 +35,8 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define GRID_TBTM (GRID_SIZE-(GRID_W*3))
 #define GRID_BELOW (GRID_W*3)
 
-#define MATCH_TIMEOUT 30
+#define MATCH_TIMEOUT 10
+#define LONG_TIMEOUT 30
 
 #define CHANGE_BUF1 (1<<7)
 #define CHANGE_BUF2 (1<<6)
@@ -152,6 +153,7 @@ entity_t player2;
 bool curbuf;
 uint8_t main_timer;
 
+uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 
 
 void main(void) {
@@ -205,17 +207,18 @@ void initgfx(void) {
 	cursor_spr = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	grid_spr = malloc(16*16+2);
 	dzx7_Turbo(grid_compressed,grid_spr);
+	curbuf = 1;
 }
 
 	
 void initgamestate(options_t *options) {
-	uint8_t t,x1,x2;
+	uint8_t t,x1,x2,dropmax;
 	//Clear entity memory
 	memset(&player1,0,sizeof player1);
 	memset(&player2,0,sizeof player2);
 	//Set player IDs
 	player1.playerid = PLAYER1;
-	player1.playerid = PLAYER2;
+	player2.playerid = PLAYER2;
 	//Set grid top position
 	player1.grid_top = player2.grid_top = 16;
 	//Set grid left position
@@ -240,23 +243,28 @@ void initgamestate(options_t *options) {
 	}
 	//Preselect game level
 	if (options->type == TYPE_FLASH) {
+		player1.drop_max = fallspeed[options->p1_level];
+		player2.drop_max = fallspeed[options->p2_level];
 		//Pregen board based on level
 	} else {
 		player1.level = options->p1_level;
 		player2.level = options->p2_level;
+		player1.drop_max = player2.drop_max = LONG_TIMEOUT;
 	}
 	//Set up dgrid to force initial render
 	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	//Set initial delay cycles
 	player1.cur_delay = player2.cur_delay = MATCH_TIMEOUT;
+	//Initialize triad
+	gentriad(&player1);
 }
 
 
 void gentriad(entity_t *entity) {
 	uint8_t *triad,i,t;
 	triad = entity->next_triad;
-	for (i=0;i<3;i++,triad++) *triad = GRID_GEM1 + randInt(0,entity->max_types);
+	for (i=0;i<3;i++) triad[i] = GRID_GEM1 + randInt(0,entity->max_types);
 }
 
 void rungame(options_t *options) {
@@ -267,8 +275,18 @@ void rungame(options_t *options) {
 	int longctr;
 	
 	//Generate game static background
-	ptr = (uint8_t*)0xD40000;
-	for(longctr = 320*240*2; longctr; --longctr, ptr++) *ptr = 0x09;
+	asm(" ld bc,51200");
+	asm(" ld hl,0D40000h");
+	asm(" ld de,090909h");
+	asm("loclbl9001:");
+	asm(" ld (hl),de");
+	asm(" inc hl");
+	asm(" inc hl");
+	asm(" inc hl");
+	asm(" dec bc");
+	asm(" ld a,b");
+	asm(" or a,c");
+	asm(" jr nz,loclbl9001");
 	for(i=0;i<2;++i) { redrawboard(options); gfx_SwapDraw(); }
 	//End generate game static background
 	
@@ -285,20 +303,28 @@ void rungame(options_t *options) {
 		} else if (player1.state == GM_PLAYMATCH) {
 			falldown(&player1);
 			//Check if there has been any change in the visible grid.
+			
+			//TODO: ADD DEBUG DISPLAY TO CHECK FOR CURRENT STATE OF CGRID BUFFER
+			//      ON EACH DELAY TIMEOUT (NEED TO FALL DOWN)
+			
 			for (i=GRID_START,t=0;i<GRID_SIZE;++i) {
 				t |= player1.cgrid[i] & (CHANGE_BUF1|CHANGE_BUF2);
 			}
 			if (t) player1.cur_delay = MATCH_TIMEOUT; //And reset timeout if change.
 			//Check for matches, update grid for match anim, and update score
+			//Check for level up, and then update drop_max accordingly
 			//
 			//If match timed out, proceed to place new triad.
 			if (!--(player1.cur_delay)) {
 				t = (player1.playerid==PLAYER1) ? 2 : 3;
+				dbg_sprintf(dbgout,"Emitting triad objects: ");
 				for (i=0;i<3;++i,t+=GRID_W) {
 					player1.grid[t] = player1.next_triad[i];
+					dbg_sprintf(dbgout,"%i, ",player1.next_triad[i]);
 					player1.cgrid[t] = CHANGE_BUF1|CHANGE_BUF2;
 					player1.next_triad[i] = 0;
 				}
+				dbg_sprintf(dbgout,"\n");
 				player1.cur_delay = player1.drop_max;
 				player1.state = GM_PLAYMOVE;
 			}
@@ -309,6 +335,11 @@ void rungame(options_t *options) {
 				player1.stay_delay = 1;
 				player1.cur_delay = 1;
 			}
+			//Check and handle any left/right motions.
+			if (kd&kb_Left) movedir(&player1,DIR_LEFT);
+			if (kd&kb_Right) movedir(&player1,DIR_RIGHT);
+			//Check if swap (2nd)
+			//
 			idx = player1.triad_idx;
 			//Check if the spot below triad is empty or not on bottom row.
 			if (player1.grid[idx+(GRID_W*3)] == GRID_EMPTY && idx<GRID_TBTM) {
@@ -327,7 +358,7 @@ void rungame(options_t *options) {
 				}
 				//If not empty, make sure stay_delay is nonzero else do matching
 				if (!--(player1.stay_delay)) {
-					player1.cur_delay = MATCH_TIMEOUT;
+					player1.cur_delay = LONG_TIMEOUT;
 					player1.state = GM_PLAYMATCH;
 					continue;
 				}
@@ -336,7 +367,7 @@ void rungame(options_t *options) {
 			break;  //For now, exit game
 		
 		} else break; //Illegal value - stop playing the game
-		
+		//dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i\n",player1.state,player1.cur_delay,player1.stay_delay);
 		redrawboard(options);
 		gfx_SwapDraw();
 	}
@@ -358,12 +389,12 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 				gfx_Sprite_NoClip(grid_spr,x,y);
 				tileid = e->grid[grididx];
 				if (tileid >= GRID_EXP1 && tileid <= GRID_EXP7) {
-					gfx_TransparentSprite_NoClip((gfx_sprite_t*)explosion_spr[GRID_EXP1-tileid],x,y);
+					gfx_RLETSprite_NoClip((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
 					if (++tileid >GRID_EXP7) tileid = GRID_EMPTY;
 					tilestate |= mask_buf; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
 					if (!(tilestate&TILE_FLASHING) || main_timer&1) {
-						gfx_TransparentSprite((gfx_sprite_t*)gems_spr[GRID_GEM1-tileid],x,y);
+						gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y);
 					}
 				}
 				e->grid[grididx] = tileid;
