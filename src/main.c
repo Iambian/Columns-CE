@@ -37,6 +37,7 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 
 #define MATCH_TIMEOUT 10
 #define LONG_TIMEOUT 30
+#define MOVESIDE_TIMEOUT 5
 
 #define CHANGE_BUF1 (1<<7)
 #define CHANGE_BUF2 (1<<6)
@@ -136,6 +137,7 @@ void rungame(options_t *options);
 void redrawboard(options_t *options);
 void falldown(entity_t *e);
 void movedir(entity_t *e, enum Direction dir);
+uint8_t gridmatch(entity_t *e);  //returns number of blocks matched, mods cgrid
 
 
 
@@ -269,11 +271,18 @@ void gentriad(entity_t *entity) {
 
 void rungame(options_t *options) {
 	uint8_t i,t,idx;
+	uint8_t moveside_active,moveside_delay;
+	uint8_t shuffle_active;
 	uint8_t timer_p1,timer_p2;
 	kb_key_t kd,kc;
 	uint8_t *ptr;
 	int longctr;
+	uint8_t flash_active,flash_countdown;
+	uint8_t score_active,score_countdown;
+	uint8_t matches_found;
 	
+	moveside_delay = MOVESIDE_TIMEOUT;
+	shuffle_active = moveside_active = 0;
 	//Generate game static background
 	asm(" ld bc,51200");
 	asm(" ld hl,0D40000h");
@@ -296,39 +305,75 @@ void rungame(options_t *options) {
 		kd = kb_Data[7];
 		
 		if (kc&kb_Mode) { keywait(); ;return; } //For now, exit game immediately
+		//Left/right debouncing no matter the mode
+		if (kd&(kb_Left|kb_Right)) {
+			if (moveside_active) {
+				if (moveside_delay) {
+					kd = 0;
+					moveside_delay--;
+				}
+			} else {
+				moveside_active = 1;
+				moveside_delay = MOVESIDE_TIMEOUT;
+			}
+		} else moveside_active = 0;
+		//2nd key debouncing
+		if (kc&kb_2nd) {
+			if (shuffle_active) kc &= ~kb_2nd;
+			else shuffle_active = 1;
+		} else shuffle_active = 0;
 		
 		if (player1.state == GM_PLAYSTART) {
 			
 			
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_PLAYMATCH) {
 			falldown(&player1);
-			//Check if there has been any change in the visible grid.
-			
-			//TODO: ADD DEBUG DISPLAY TO CHECK FOR CURRENT STATE OF CGRID BUFFER
-			//      ON EACH DELAY TIMEOUT (NEED TO FALL DOWN)
 			
 			for (i=GRID_START,t=0;i<GRID_SIZE;++i) {
-				t |= player1.cgrid[i] & (CHANGE_BUF1|CHANGE_BUF2);
+				t |= player1.cgrid[i] & (CHANGE_BUF1|CHANGE_BUF2|TILE_FLASHING);
 			}
 			if (t) player1.cur_delay = MATCH_TIMEOUT; //And reset timeout if change.
+			//If flashing, wait until timeout to destroy gems fully.
+			if (flash_active) {
+				if (!--flash_countdown) {
+					flash_active = 0;
+					for (i=0; i<GRID_SIZE; ++i) {
+						if (player1.cgrid[i] & TILE_FLASHING) {
+							player1.cgrid[i] &= ~TILE_FLASHING;
+							player1.grid[i] = GRID_EXP1;
+						}
+					}
+				}
+			}
+			
 			//Check for matches, update grid for match anim, and update score
 			//Check for level up, and then update drop_max accordingly
 			//
-			//If match timed out, proceed to place new triad.
+			//If match timed out, check board for matches proceed to place new triad.
 			if (!--(player1.cur_delay)) {
-				t = (player1.playerid==PLAYER1) ? 2 : 3;
-				dbg_sprintf(dbgout,"Emitting triad objects: ");
-				for (i=0;i<3;++i,t+=GRID_W) {
-					player1.grid[t] = player1.next_triad[i];
-					dbg_sprintf(dbgout,"%i, ",player1.next_triad[i]);
-					player1.cgrid[t] = CHANGE_BUF1|CHANGE_BUF2;
-					player1.next_triad[i] = 0;
+				matches_found = gridmatch(&player1);
+				if (matches_found) {
+					flash_active = 1;
+					flash_countdown = 30;
+					//Add scoring when it is the thing to do.
+					//
+				} else {
+					player1.triad_idx = t = (player1.playerid==PLAYER1) ? 2 : 3;
+					dbg_sprintf(dbgout,"Emitting triad objects: ");
+					for (i=0;i<3;++i,t+=GRID_W) {
+						player1.grid[t] = player1.next_triad[i];
+						dbg_sprintf(dbgout,"%i, ",player1.next_triad[i]);
+						player1.cgrid[t] = CHANGE_BUF1|CHANGE_BUF2;
+						player1.next_triad[i] = 0;
+					}
+					dbg_sprintf(dbgout,"\n");
+					player1.cur_delay = player1.drop_max;
+					player1.stay_delay = LONG_TIMEOUT;
+					player1.state = GM_PLAYMOVE;
 				}
-				dbg_sprintf(dbgout,"\n");
-				player1.cur_delay = player1.drop_max;
-				player1.state = GM_PLAYMOVE;
 			}
-			
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_PLAYMOVE) {
 			//If push down, speed things up everywhere.
 			if (kd&kb_Down) {
@@ -339,35 +384,64 @@ void rungame(options_t *options) {
 			if (kd&kb_Left) movedir(&player1,DIR_LEFT);
 			if (kd&kb_Right) movedir(&player1,DIR_RIGHT);
 			//Check if swap (2nd)
+			if (kc&kb_2nd) {
+				t = player1.grid[player1.triad_idx];
+				for (i=0,idx=player1.triad_idx;i<3;i++,idx+=GRID_W) {
+					player1.grid[idx] = player1.grid[idx+GRID_W];
+					player1.cgrid[idx] |= CHANGE_BUF1|CHANGE_BUF2;
+				}
+				player1.grid[player1.triad_idx+(GRID_W*2)] = t;
+			}
 			//
 			idx = player1.triad_idx;
+			
+			
+			
+			
+			
+			
+			
 			//Check if the spot below triad is empty or not on bottom row.
-			if (player1.grid[idx+(GRID_W*3)] == GRID_EMPTY && idx<GRID_TBTM) {
+			if ((player1.grid[idx+(GRID_W*3)] == GRID_EMPTY) && (idx<GRID_TBTM)) {
 				//If empty, reset stay_delay and check cur_delay if need to fall
-				player1.stay_delay = MATCH_TIMEOUT;
+				//dbg_sprintf(dbgout,"Condition 1: %i\n",player1.grid[idx+(GRID_W*3)] == GRID_EMPTY);
+				//dbg_sprintf(dbgout,"Condition 2: %i\n",GRID_EMPTY && idx<GRID_TBTM);
+				player1.stay_delay = LONG_TIMEOUT;
 				if (!--(player1.cur_delay)) {
 					falldown(&player1);
+					if (player1.triad_idx >= GRID_START && !player1.next_triad[0]) {
+						gentriad(&player1);
+					}
 					player1.cur_delay = player1.drop_max;
 				}
 			} else {
 				player1.cur_delay = 1; //Make sure delay hovers at 1 in case
-				//Check to see if we didn't stop past the top. If so, game over.
-				if (idx<GRID_W*2) {
-					player1.state = GM_GAMEOVER;
-					continue;
-				}
 				//If not empty, make sure stay_delay is nonzero else do matching
 				if (!--(player1.stay_delay)) {
+					//Check to see if we didn't stop past the top. If so, game over.
+					if (idx<GRID_W*2 && player1.grid[idx+GRID_BELOW]) {
+						dbg_sprintf(dbgout,"Game over idx %i",idx);
+						player1.state = GM_GAMEOVER;
+						continue;
+					}
 					player1.cur_delay = LONG_TIMEOUT;
 					player1.state = GM_PLAYMATCH;
 					continue;
 				}
 			}
+			
+			
+			
+			
+			
+			
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_GAMEOVER) {
+			dbg_sprintf(dbgout,"Game over triggered.\n");
 			break;  //For now, exit game
 		
 		} else break; //Illegal value - stop playing the game
-		//dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i\n",player1.state,player1.cur_delay,player1.stay_delay);
+		dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);
 		redrawboard(options);
 		gfx_SwapDraw();
 	}
@@ -433,16 +507,19 @@ void redrawboard(options_t *options) {
 //not on the bottom row. We should also implement half drop support eventually.
 void falldown(entity_t *e) {
 	uint8_t i;
-	for (i=GRID_SIZE-1;i>GRID_W;--i) {
+	i = e->triad_idx+GRID_BELOW;
+//	dbg_sprintf(dbgout,"Cond1 %i, Cond2 %i\n",i<GRID_SIZE,e->grid[i]==GRID_EMPTY);
+	if (i<GRID_SIZE && e->grid[i]==GRID_EMPTY) {
+		e->triad_idx += GRID_W;
+	}
+	dbg_sprintf(dbgout,"Falldown new idx %i\n",e->triad_idx);
+	for (i=GRID_SIZE-1;i>GRID_W-1;--i) {
 		if (e->grid[i] == GRID_EMPTY && e->grid[i-GRID_W] != GRID_EMPTY) {
 			e->grid[i] = e->grid[i-GRID_W];
 			e->grid[i-GRID_W] = GRID_EMPTY;
-			e->cgrid[i] |= CHANGE_BUF1|CHANGE_BUF1;
-			e->cgrid[i-GRID_W] |= CHANGE_BUF1|CHANGE_BUF1;
+			e->cgrid[i] |= CHANGE_BUF1|CHANGE_BUF2;
+			e->cgrid[i-GRID_W] |= CHANGE_BUF1|CHANGE_BUF2;
 		}
-	}
-	if (e->triad_idx<GRID_TBTM && e->cgrid[i+GRID_BELOW]!=GRID_EMPTY) {
-		e->triad_idx += GRID_W;
 	}
 }
 
@@ -450,9 +527,11 @@ void movedir(entity_t *e, enum Direction dir) {
 	int8_t i,idx,oldidx,temp;
 	//Move idx to left or right if we aren't on a field boundary
 	oldidx = idx = e->triad_idx;
-	if ((dir<0 && !(idx%GRID_W)) || (dir>0 && !((idx-1)%GRID_W))) {
-		i =+ dir;
-	}
+	if ((dir<0 && idx%GRID_W) || (dir>0 && ((idx+1)%GRID_W))) {
+		idx += dir;
+		dbg_sprintf(dbgout,"Current state %i\n",idx);
+		dbg_sprintf(dbgout,"Dir change to %i\n",dir);
+	} else return;
 	//Do not change anything else if we tried to move on top of something else.
 	if (e->grid[idx+(GRID_W*2)] != GRID_EMPTY) return;
 	//Begin exchanging.
@@ -472,6 +551,52 @@ void movedir(entity_t *e, enum Direction dir) {
 	if (idx<GRID_SIZE) e->cgrid[idx] |= CHANGE_BUF1 | CHANGE_BUF2;
 }
 
+
+//Using the TILE_FLASHING flag to mark and detect tiles that have matched.
+uint8_t gridmatch(entity_t *e) {
+	uint8_t i,t,matches,dist;
+	uint8_t curidx,curx,cury;
+	uint8_t tempidx,tempx,tempy;
+	uint8_t limx,limy;
+	
+	//Ensure grid is free of anything flashing. This shouldn't happen, though.
+	for(i=0;i<GRID_SIZE;++i) e->cgrid[i] &= ~TILE_FLASHING;
+	
+	//Outer loop - vertical traversal
+	curidx = 0;
+	for (cury=0,limy=GRID_H; limy>=3; --limy,++cury) {
+		//Inner(ish) loop - horizontal sweep
+		for(curx=0,limx=GRID_W; limx; --limx,++curx,++curidx) {
+			//If tile is empty
+			t = e->grid[curidx];
+			if (t==GRID_EMPTY) continue;
+			//Checking horizontal matches (towards right)
+			for (tempx=curx,tempidx=curidx,dist=0; 
+			tempx<limx; ++tempx,++tempidx,++dist) {
+				//If match, keep checking
+				if (e->grid[curidx] == t) continue;
+				else {
+					//On first mismatch, check if match is long enough
+					if (dist<3) break;
+					//Otherwise, rewind while setting tiles to flashing
+					for (i=dist; i; --i,--tempidx) {
+						e->cgrid[tempidx] |= TILE_FLASHING;
+					}
+					break;
+				}
+			}
+			//Checking diagonal matches (towards bottom-right)
+			//Checking vertical matches (towards bottom)
+			//Checking diagonal matches (towards bottom-left)
+		}
+	}
+	
+	//Check how many tiles have been set to flashing and return that number.
+	for(matches=i=0; i<GRID_SIZE; ++i) {
+		if (e->cgrid[i]&TILE_FLASHING) ++matches;
+	}
+	return matches;
+}
 
 
 
