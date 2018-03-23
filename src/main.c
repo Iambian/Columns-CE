@@ -190,24 +190,30 @@ void main(void) {
 
 void initgfx(void) {
 	uint8_t i;
-	void *baseimg = (void*) gfx_vbuffer;
+	void *baseimg;
 	
+	dbg_sprintf(dbgout,"Starting graphics initialization...\n");
 	gfx_Begin();
 	gfx_SetDrawBuffer();
 	gfx_SetTransparentColor(TRANSPARENT_COLOR);
 	ti_CloseAll();
-
+	
+	baseimg = (void*) gfx_vbuffer;
+	dbg_sprintf(dbgout,"Decompressing gems...\n");
 	for (i=0;i<gems_tiles_num;i++) {
 		dzx7_Turbo(gems_tiles_compressed[i],baseimg);
 		gems_spr[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	}
+	dbg_sprintf(dbgout,"Decompressing explosions...\n");
 	for (i=0;i<explosion_tiles_num;i++) {
 		dzx7_Turbo(explosion_tiles_compressed[i],baseimg);
 		explosion_spr[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	}
+	dbg_sprintf(dbgout,"Decompressing cursor...\n");
 	dzx7_Turbo(cursor_compressed,baseimg);
 	cursor_spr = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	grid_spr = malloc(16*16+2);
+	dbg_sprintf(dbgout,"Decompressing grid...\n");
 	dzx7_Turbo(grid_compressed,grid_spr);
 	curbuf = 1;
 }
@@ -282,7 +288,7 @@ void rungame(options_t *options) {
 	uint8_t matches_found;
 	
 	moveside_delay = MOVESIDE_TIMEOUT;
-	shuffle_active = moveside_active = 0;
+	flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
 	//Generate game static background
 	asm(" ld bc,51200");
 	asm(" ld hl,0D40000h");
@@ -340,7 +346,7 @@ void rungame(options_t *options) {
 					flash_active = 0;
 					for (i=0; i<GRID_SIZE; ++i) {
 						if (player1.cgrid[i] & TILE_FLASHING) {
-							player1.cgrid[i] &= ~TILE_FLASHING;
+							player1.cgrid[i] = CHANGE_BUF1|CHANGE_BUF2;
 							player1.grid[i] = GRID_EXP1;
 						}
 					}
@@ -420,7 +426,7 @@ void rungame(options_t *options) {
 				if (!--(player1.stay_delay)) {
 					//Check to see if we didn't stop past the top. If so, game over.
 					if (idx<GRID_W*2 && player1.grid[idx+GRID_BELOW]) {
-						dbg_sprintf(dbgout,"Game over idx %i",idx);
+						//dbg_sprintf(dbgout,"Game over idx %i",idx);
 						player1.state = GM_GAMEOVER;
 						continue;
 					}
@@ -441,7 +447,7 @@ void rungame(options_t *options) {
 			break;  //For now, exit game
 		
 		} else break; //Illegal value - stop playing the game
-		dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);
+		//dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);
 		redrawboard(options);
 		gfx_SwapDraw();
 	}
@@ -452,6 +458,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 	uint8_t tilestate,tileid,grididx,gridx,gridy,y;
 	unsigned int x;
 	
+	main_timer++;
 	y = e->grid_top;
 	grididx = GRID_START;
 	for (gridy = GRID_HSTART; gridy < GRID_H; gridy++) {
@@ -467,7 +474,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 					if (++tileid >GRID_EXP7) tileid = GRID_EMPTY;
 					tilestate |= mask_buf; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
-					if (!(tilestate&TILE_FLASHING) || main_timer&1) {
+					if (!(tilestate&TILE_FLASHING) || main_timer&4) {
 						gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y);
 					}
 				}
@@ -512,7 +519,7 @@ void falldown(entity_t *e) {
 	if (i<GRID_SIZE && e->grid[i]==GRID_EMPTY) {
 		e->triad_idx += GRID_W;
 	}
-	dbg_sprintf(dbgout,"Falldown new idx %i\n",e->triad_idx);
+	//dbg_sprintf(dbgout,"Falldown new idx %i\n",e->triad_idx);
 	for (i=GRID_SIZE-1;i>GRID_W-1;--i) {
 		if (e->grid[i] == GRID_EMPTY && e->grid[i-GRID_W] != GRID_EMPTY) {
 			e->grid[i] = e->grid[i-GRID_W];
@@ -529,8 +536,8 @@ void movedir(entity_t *e, enum Direction dir) {
 	oldidx = idx = e->triad_idx;
 	if ((dir<0 && idx%GRID_W) || (dir>0 && ((idx+1)%GRID_W))) {
 		idx += dir;
-		dbg_sprintf(dbgout,"Current state %i\n",idx);
-		dbg_sprintf(dbgout,"Dir change to %i\n",dir);
+		//dbg_sprintf(dbgout,"Current state %i\n",idx);
+		//dbg_sprintf(dbgout,"Dir change to %i\n",dir);
 	} else return;
 	//Do not change anything else if we tried to move on top of something else.
 	if (e->grid[idx+(GRID_W*2)] != GRID_EMPTY) return;
@@ -557,32 +564,31 @@ uint8_t gridmatch(entity_t *e) {
 	uint8_t i,t,matches,dist;
 	uint8_t curidx,curx,cury;
 	uint8_t tempidx,tempx,tempy;
-	uint8_t limx,limy;
+	uint8_t limx,limy,limidx;
 	
 	//Ensure grid is free of anything flashing. This shouldn't happen, though.
 	for(i=0;i<GRID_SIZE;++i) e->cgrid[i] &= ~TILE_FLASHING;
 	
 	//Outer loop - vertical traversal
 	curidx = 0;
-	for (cury=0,limy=GRID_H; limy>=3; --limy,++cury) {
+	for (cury=0,limy=GRID_H; limy; --limy,++cury) {
 		//Inner(ish) loop - horizontal sweep
 		for(curx=0,limx=GRID_W; limx; --limx,++curx,++curidx) {
 			//If tile is empty
 			t = e->grid[curidx];
-			if (t==GRID_EMPTY) continue;
+			if (t==GRID_EMPTY || t<GRID_GEM1 || t>GRID_GEM6) continue;
+			dbg_sprintf(dbgout,"Mstate cx:%i cy:%i lx:%i ly:%i idx:%i\n",curx,cury,limx,limy,curidx);
 			//Checking horizontal matches (towards right)
-			for (tempx=curx,tempidx=curidx,dist=0; 
-			tempx<limx; ++tempx,++tempidx,++dist) {
-				//If match, keep checking
-				if (e->grid[curidx] == t) continue;
-				else {
-					//On first mismatch, check if match is long enough
-					if (dist<3) break;
-					//Otherwise, rewind while setting tiles to flashing
-					for (i=dist; i; --i,--tempidx) {
-						e->cgrid[tempidx] |= TILE_FLASHING;
-					}
-					break;
+			for (limidx=limx,tempidx=curidx,dist=0;
+			limidx; --limidx,++tempidx,++dist) {
+				if (e->grid[tempidx] != t) break;
+			}
+			if (dist>2) {
+				if (!limidx) --tempidx;
+				for (;dist;--dist) {
+					--tempidx;
+					dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+					e->cgrid[tempidx] |= TILE_FLASHING;
 				}
 			}
 			//Checking diagonal matches (towards bottom-right)
@@ -595,6 +601,7 @@ uint8_t gridmatch(entity_t *e) {
 	for(matches=i=0; i<GRID_SIZE; ++i) {
 		if (e->cgrid[i]&TILE_FLASHING) ++matches;
 	}
+	dbg_sprintf(dbgout,"Matches found: %i\n",matches);
 	return matches;
 }
 
