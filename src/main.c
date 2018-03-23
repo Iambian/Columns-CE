@@ -361,7 +361,7 @@ void rungame(options_t *options) {
 				matches_found = gridmatch(&player1);
 				if (matches_found) {
 					flash_active = 1;
-					flash_countdown = 30;
+					flash_countdown = 20;
 					//Add scoring when it is the thing to do.
 					//
 				} else {
@@ -391,12 +391,12 @@ void rungame(options_t *options) {
 			if (kd&kb_Right) movedir(&player1,DIR_RIGHT);
 			//Check if swap (2nd)
 			if (kc&kb_2nd) {
-				t = player1.grid[player1.triad_idx];
-				for (i=0,idx=player1.triad_idx;i<3;i++,idx+=GRID_W) {
-					player1.grid[idx] = player1.grid[idx+GRID_W];
+				t = player1.grid[player1.triad_idx+(2*GRID_W)];
+				for (i=3,idx=player1.triad_idx+(2*GRID_W);i;--i,idx-=GRID_W) {
+					player1.grid[idx] = player1.grid[idx-GRID_W];
 					player1.cgrid[idx] |= CHANGE_BUF1|CHANGE_BUF2;
 				}
-				player1.grid[player1.triad_idx+(GRID_W*2)] = t;
+				player1.grid[player1.triad_idx] = t;
 			}
 			//
 			idx = player1.triad_idx;
@@ -474,7 +474,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 					if (++tileid >GRID_EXP7) tileid = GRID_EMPTY;
 					tilestate |= mask_buf; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
-					if (!(tilestate&TILE_FLASHING) || main_timer&4) {
+					if (!(tilestate&TILE_FLASHING) || main_timer&2) {
 						gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y);
 					}
 				}
@@ -584,7 +584,7 @@ uint8_t gridmatch(entity_t *e) {
 				if (e->grid[tempidx] != t) break;
 			}
 			if (dist>2) {
-				if (!limidx) --tempidx;
+				//if (!limidx) --tempidx;
 				for (;dist;--dist) {
 					--tempidx;
 					dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
