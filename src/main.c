@@ -149,6 +149,8 @@ gfx_rletsprite_t *gems_spr[gems_tiles_num];
 gfx_rletsprite_t *explosion_spr[explosion_tiles_num];
 gfx_rletsprite_t *cursor_spr;
 gfx_sprite_t *grid_spr;
+gfx_sprite_t *greentile;
+gfx_sprite_t *cyantile;
 uint8_t gamestate;
 entity_t player1;
 entity_t player2;
@@ -192,29 +194,28 @@ void initgfx(void) {
 	uint8_t i;
 	void *baseimg;
 	
-	dbg_sprintf(dbgout,"Starting graphics initialization...\n");
 	gfx_Begin();
 	gfx_SetDrawBuffer();
 	gfx_SetTransparentColor(TRANSPARENT_COLOR);
 	ti_CloseAll();
 	
 	baseimg = (void*) gfx_vbuffer;
-	dbg_sprintf(dbgout,"Decompressing gems...\n");
 	for (i=0;i<gems_tiles_num;i++) {
 		dzx7_Turbo(gems_tiles_compressed[i],baseimg);
 		gems_spr[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	}
-	dbg_sprintf(dbgout,"Decompressing explosions...\n");
 	for (i=0;i<explosion_tiles_num;i++) {
 		dzx7_Turbo(explosion_tiles_compressed[i],baseimg);
 		explosion_spr[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	}
-	dbg_sprintf(dbgout,"Decompressing cursor...\n");
 	dzx7_Turbo(cursor_compressed,baseimg);
 	cursor_spr = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	grid_spr = malloc(16*16+2);
-	dbg_sprintf(dbgout,"Decompressing grid...\n");
 	dzx7_Turbo(grid_compressed,grid_spr);
+	//Alloc mem but do not decompress bg tile assets.
+	//Decompression will be done at game start depending on selected game mode.
+	greentile = malloc(32*32+2);
+	cyantile = malloc(32*32+2);
 	curbuf = 1;
 }
 
@@ -275,6 +276,28 @@ void gentriad(entity_t *entity) {
 	for (i=0;i<3;i++) triad[i] = GRID_GEM1 + randInt(0,entity->max_types);
 }
 
+//Magic numbers are for 32x32 tiles on a 320x240 display
+//Some conversions were required since the original was a 320x224 display.
+void drawgamebg(uint8_t palette_offset) {
+	int x,y;
+	uint8_t ix,iy;
+	gfx_sprite_t *ptr;
+	
+	dzx7_Turbo(greentile_compressed,greentile);
+	dzx7_Turbo(cyantile_compressed,cyantile);
+	
+	//Do stuff with palette_offset to modify the tiles. The calling routine
+	//will have set palette_offset in accordance to current game mode.
+	
+	for(iy=0,y=-8; iy<8; ++iy,y+=32) {
+		for(ix=0,x=0; ix<10; ++ix,x+=32) {
+			if ((ix^iy)&1) ptr = greentile;
+			else ptr = cyantile;
+			gfx_Sprite(ptr,x,y);
+		}
+	}
+}
+
 void rungame(options_t *options) {
 	uint8_t i,t,idx;
 	uint8_t moveside_active,moveside_delay;
@@ -286,23 +309,18 @@ void rungame(options_t *options) {
 	uint8_t flash_active,flash_countdown;
 	uint8_t score_active,score_countdown;
 	uint8_t matches_found;
+	uint8_t palette_offset;
 	
 	moveside_delay = MOVESIDE_TIMEOUT;
 	flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
 	//Generate game static background
-	asm(" ld bc,51200");
-	asm(" ld hl,0D40000h");
-	asm(" ld de,090909h");
-	asm("loclbl9001:");
-	asm(" ld (hl),de");
-	asm(" inc hl");
-	asm(" inc hl");
-	asm(" inc hl");
-	asm(" dec bc");
-	asm(" ld a,b");
-	asm(" or a,c");
-	asm(" jr nz,loclbl9001");
-	for(i=0;i<2;++i) { redrawboard(options); gfx_SwapDraw(); }
+	//TODO: Set palette_offset wrt current game mode (in options)
+	palette_offset = 0;
+	for(i=0;i<2;++i) {
+		drawgamebg(palette_offset);
+		redrawboard(options);
+		gfx_SwapDraw(); 
+	}
 	//End generate game static background
 	
 	while (1) {
@@ -365,6 +383,16 @@ void rungame(options_t *options) {
 					//Add scoring when it is the thing to do.
 					//
 				} else {
+					//Check if anything is past the top before continuing
+					for (i=t=0; i<GRID_START; ++i) {
+						if (player1.grid[i] != GRID_EMPTY) t = 1;
+					}
+					if (t) {
+						player1.state = GM_GAMEOVER;
+						player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
+						continue;
+					}
+					//Emit triad object.
 					player1.triad_idx = t = (player1.playerid==PLAYER1) ? 2 : 3;
 					dbg_sprintf(dbgout,"Emitting triad objects: ");
 					for (i=0;i<3;++i,t+=GRID_W) {
@@ -401,12 +429,6 @@ void rungame(options_t *options) {
 			//
 			idx = player1.triad_idx;
 			
-			
-			
-			
-			
-			
-			
 			//Check if the spot below triad is empty or not on bottom row.
 			if ((player1.grid[idx+(GRID_W*3)] == GRID_EMPTY) && (idx<GRID_TBTM)) {
 				//If empty, reset stay_delay and check cur_delay if need to fall
@@ -425,27 +447,22 @@ void rungame(options_t *options) {
 				//If not empty, make sure stay_delay is nonzero else do matching
 				if (!--(player1.stay_delay)) {
 					//Check to see if we didn't stop past the top. If so, game over.
-					if (idx<GRID_W*2 && player1.grid[idx+GRID_BELOW]) {
-						//dbg_sprintf(dbgout,"Game over idx %i",idx);
-						player1.state = GM_GAMEOVER;
-						continue;
-					}
 					player1.cur_delay = LONG_TIMEOUT;
 					player1.state = GM_PLAYMATCH;
 					continue;
 				}
 			}
-			
-			
-			
-			
-			
+
 			
 			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_GAMEOVER) {
-			dbg_sprintf(dbgout,"Game over triggered.\n");
-			break;  //For now, exit game
-		
+			if (player1.triad_idx==255) break;  //nothing after anim. Kill rtn.
+			if (main_timer&1) {  //Cycle every other frame
+				for(i=0;i<6;++i,player1.triad_idx--) {
+					player1.grid[player1.triad_idx] = GRID_EXP1;
+					player1.cgrid[player1.triad_idx] = CHANGE_BUF1|CHANGE_BUF2;
+				}
+			}
 		} else break; //Illegal value - stop playing the game
 		//dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);
 		redrawboard(options);
@@ -577,7 +594,7 @@ uint8_t gridmatch(entity_t *e) {
 			//If tile is empty
 			t = e->grid[curidx];
 			if (t==GRID_EMPTY || t<GRID_GEM1 || t>GRID_GEM6) continue;
-			dbg_sprintf(dbgout,"Mstate cx:%i cy:%i lx:%i ly:%i idx:%i\n",curx,cury,limx,limy,curidx);
+			//dbg_sprintf(dbgout,"Mstate cx:%i cy:%i lx:%i ly:%i idx:%i\n",curx,cury,limx,limy,curidx);
 			//Checking horizontal matches (towards right)
 			for (limidx=limx,tempidx=curidx,dist=0;
 			limidx; --limidx,++tempidx,++dist) {
@@ -587,13 +604,49 @@ uint8_t gridmatch(entity_t *e) {
 				//if (!limidx) --tempidx;
 				for (;dist;--dist) {
 					--tempidx;
-					dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
 					e->cgrid[tempidx] |= TILE_FLASHING;
 				}
 			}
 			//Checking diagonal matches (towards bottom-right)
+			for (limidx=((limy>limx)?limx:limy),tempidx=curidx,dist=0;
+			limidx; --limidx,tempidx+=(GRID_W+1),++dist) {
+				if (e->grid[tempidx] != t) break;
+			}
+			if (dist>2) {
+				//if (!limidx) --tempidx;
+				for (;dist;--dist) {
+					tempidx-=(GRID_W+1);
+					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+					e->cgrid[tempidx] |= TILE_FLASHING;
+				}
+			}
 			//Checking vertical matches (towards bottom)
+			for (limidx=limy,tempidx=curidx,dist=0;
+			limidx; --limidx,tempidx+=GRID_W,++dist) {
+				if (e->grid[tempidx] != t) break;
+			}
+			if (dist>2) {
+				//if (!limidx) --tempidx;
+				for (;dist;--dist) {
+					tempidx-=GRID_W;
+					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+					e->cgrid[tempidx] |= TILE_FLASHING;
+				}
+			}
 			//Checking diagonal matches (towards bottom-left)
+			for (limidx=((cury>curx)?curx:cury),tempidx=curidx,dist=0;
+			limidx; --limidx,tempidx+=(GRID_W-1),++dist) {
+				if (e->grid[tempidx] != t) break;
+			}
+			if (dist>2) {
+				//if (!limidx) --tempidx;
+				for (;dist;--dist) {
+					tempidx-=(GRID_W-1);
+					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+					e->cgrid[tempidx] |= TILE_FLASHING;
+				}
+			}
 		}
 	}
 	
