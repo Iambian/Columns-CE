@@ -24,6 +24,10 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define TRANSPARENT_COLOR 0xF8
 #define GRIDSTART_X 5
 #define GRIDSTART_Y 5
+// As specified (rather obliquely) in convpng.ini
+#define FONT_WHITE 2
+#define FONT_GOLD 3
+#define FONT_CYAN 4
 
 #define GRID_W 6
 #define GRID_H 15
@@ -123,7 +127,6 @@ typedef struct options_t {
 	uint8_t p2_level;
 	uint8_t bgm;
 } options_t;
-	
 	
 uint16_t bgp1[] = {528,396,264,4228,404,272,140,8};                  //1PO: cyan/blue
 uint16_t bgp2[] = {20876,16648,12420,8192,21008,16780,12552,8324};   //2PO: pink/lpink
@@ -253,12 +256,16 @@ void initgfx(void) {
 	void *baseimg,*flipimg;
 	uint8_t *ptr;
 	int loop;
+	uint8_t *fontspacing;
 	
 	gfx_Begin();
 	gfx_SetDrawBuffer();
 	ti_CloseAll();
 	//Font data abbreviated
 	gfx_SetFontData(font-(32*8));
+	fontspacing = malloc(128);
+	for (i=0;i<128;i++) fontspacing[i]=8;
+	gfx_SetFontSpacing(fontspacing);
 	gfx_SetPalette(tiles_gfx_pal,sizeof tiles_gfx_pal,0);
 	//Palette area at PALSWAP_AREA is initialized on game mode select
 	
@@ -364,6 +371,17 @@ void gentriad(entity_t *entity) {
 	for (i=0;i<3;i++) triad[i] = GRID_GEM1 + randInt(0,entity->max_types);
 }
 
+void drawSpriteAndClass(enum Difficulty diff, gfx_rletsprite_t *sprite, int x, int y, int offset) {
+	char *strn;
+	gfx_RLETSprite(sprite,x,y);
+	if (diff == NOVICE) strn = "NOV";
+	else if (diff == AMATEUR) strn = "AMA";
+	else if (diff == PRO) strn = "PRO";
+	else strn = "!!!";
+	gfx_PrintStringXY(strn,x+3+offset,y+2);
+}
+
+
 //Magic numbers are for 32x32 tiles on a 320x240 display
 //Some conversions were required since the original was a 320x224 display.
 void drawgamebg(options_t *options) {
@@ -380,6 +398,9 @@ void drawgamebg(options_t *options) {
 			gfx_Sprite(ptr,x,y);
 		}
 	}
+	
+	gfx_SetTextFGColor(FONT_GOLD);
+	
 	//Draw NEXT box
 	if (options->players == PLAYER2) {
 		x1 = 118;
@@ -391,16 +412,25 @@ void drawgamebg(options_t *options) {
 	gfx_RLETSprite(bg_next,x1,14);
 	if (options->players != PLAYER1) gfx_RLETSprite(bg_next,x2,14);
 		
-		
-		
+	//Draw current score/timer box
+	
+	if (options->players == PLAYER2) {
+		gfx_RLETSprite(bg_scoref,115,70); //P1
+		gfx_RLETSprite(bg_score,158,94);  //P2
+	} else {
+		gfx_RLETSprite(bg_score,62,94);  //P1
+		if (options->players == DOUBLES) {
+			gfx_RLETSprite(bg_scoref,211,94);  //P2
+		}
+	}
 		
 	//Draw current score/time indicator box
 	if (options->players == PLAYER2) {
-		 gfx_RLETSprite(bg_central,134,166);
-		 if (options->type == TYPE_FLASH || options->time_trial) {
+		 gfx_RLETSprite(bg_central,134,126);
+		 if (options->type == TYPE_FLASH) {
 			gfx_RLETSprite(bg_top5d,115,117);
 			gfx_RLETSprite(bg_btm5d,157,141);
-			gfx_PrintStringXY("best",130,131);
+			gfx_PrintStringXY("best",144,131);
 		 } else {
 			gfx_RLETSprite(bg_top8d,115,117);
 			gfx_RLETSprite(bg_btm8d,133,141);
@@ -408,7 +438,7 @@ void drawgamebg(options_t *options) {
 		 }
 	} else {
 		gfx_RLETSprite(bg_central,37,126);
-		if (options->type == TYPE_FLASH || options->time_trial) {
+		if (options->type == TYPE_FLASH) {
 			gfx_RLETSprite(bg_btm5d,61,141);
 			gfx_PrintStringXY("best",48,131);
 		} else {
@@ -416,19 +446,69 @@ void drawgamebg(options_t *options) {
 			gfx_PrintStringXY("score",44,131);
 		}
 		if (options->players == DOUBLES) {
-			gfx_RLETSprite(bg_central,229,126);
-			if (options->type == TYPE_FLASH || options->time_trial) {
-				gfx_RLETSprite(bg_btm5d,240,141);
-				gfx_PrintStringXY("best",48,131);
+			gfx_RLETSprite(bg_central,230,126);
+			if (options->type == TYPE_FLASH) {
+				gfx_RLETSprite(bg_btm5df,212,141);
+				gfx_PrintStringXY("best",240,131);
 			} else {
-				gfx_RLETSprite(bg_btm8d,236,141);
-				gfx_PrintStringXY("score",44,131);
+				gfx_RLETSprite(bg_btm8df,212,141);
+				gfx_PrintStringXY("score",236,131);
 			}
-			
+		}
+	}
+	
+	//Display current level
+	if (options->players == PLAYER2) {
+		gfx_RLETSprite(bg_central,134,166);
+		gfx_RLETSprite(bg_top3d,115,157);
+		gfx_RLETSprite(bg_btm3d,173,181);
+		gfx_PrintStringXY("level",140,171);
+	} else {
+		gfx_RLETSprite(bg_central,38,166);
+		gfx_RLETSprite(bg_btm3d,77,181);
+		gfx_PrintStringXY("level",44,171);
+		if (options->players == DOUBLES) {
+			gfx_RLETSprite(bg_central,230,166);
+			gfx_RLETSprite(bg_btm3df,212,181);
+			gfx_PrintStringXY("level",236,171);
+		}
+	}
+	
+	//Display current jewels/class
+	if (options->players == PLAYER2) {
+		gfx_RLETSprite(bg_central,134,198);
+		if (options->type == TYPE_FLASH) {
+			gfx_PrintStringXY("class",140,203);
+			drawSpriteAndClass(options->p1_class,bg_top3d,115,189,2);
+			drawSpriteAndClass(options->p2_class,bg_btm3d,173,213,0);
+		} else {
+			gfx_PrintStringXY("jewels",136,203);
+			gfx_RLETSprite(bg_top4d,115,189);
+			gfx_RLETSprite(bg_btm4d,165,213);
+		}
+	} else {
+		gfx_RLETSprite(bg_central,38,198);
+		if (options->type == TYPE_FLASH) {
+			gfx_PrintStringXY("class",44,203);
+			drawSpriteAndClass(options->p1_class,bg_btm3d,77,213,0);
+		} else {
+			gfx_PrintStringXY("jewels",40,203);
+			gfx_RLETSprite(bg_btm4d,69,213);
+		}
+		if (options->players == DOUBLES) {
+			gfx_RLETSprite(bg_central,230,198);
+			if (options->type == TYPE_FLASH) {
+				gfx_PrintStringXY("class",236,203);
+				drawSpriteAndClass(options->p2_class,bg_btm3df,212,213,0);
+			} else {
+				gfx_PrintStringXY("jewels",232,203);
+				gfx_RLETSprite(bg_btm4df,212,213);
+			}
 		}
 	}
 	
 	
+//drawSpriteAndClass(diff,*sprite,x,y,offset)
 	
 	
 	
@@ -450,6 +530,8 @@ void rungame(options_t *options) {
 	uint8_t score_active,score_countdown;
 	uint8_t matches_found;
 	uint8_t palette_offset;
+	
+RESTARTGAME:
 	
 	moveside_delay = MOVESIDE_TIMEOUT;
 	flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
@@ -474,6 +556,16 @@ void rungame(options_t *options) {
 		kb_Scan();
 		kc = kb_Data[1];
 		kd = kb_Data[7];
+		
+		// DEBUGGING START - DEL KEY CYCLES GAME MODES
+		if (kc&kb_Del) {
+			keywait();
+			if (!((++options->players) %= 3) || options->type == TYPE_ARCADE) {
+				(++options->type) %= 3;
+			}
+			goto RESTARTGAME;
+		}
+		// DEBUGGING END -- REMOVE SECTION BETWEEN WHEN NO LONGER NEEDED
 		
 		if (kc&kb_Mode) { keywait(); ;return; } //For now, exit game immediately
 		//Left/right debouncing no matter the mode
