@@ -49,6 +49,8 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define P2_GRIDLEFT 208
 #define CENTER_GRIDLEFT 112
 
+#define PALSWAP_AREA 192
+
 
 #define GRID_EMPTY 0x00
 #define GRID_GEM1 0x01
@@ -123,6 +125,17 @@ typedef struct options_t {
 } options_t;
 	
 	
+uint16_t bgp1[] = {528,396,264,4228,404,272,140,8};                  //1PO: cyan/blue
+uint16_t bgp2[] = {20876,16648,12420,8192,21008,16780,12552,8324};   //2PO: pink/lpink
+uint16_t bgp3[] = {25088,20864,16640,12416,21012,16784,12556,8328};  //DBO: gold/lav
+uint16_t bgp4[] = {528,396,264,132,516,388,260,128};                 //1PF: cyan/grn
+uint16_t bgp5[] = {16652,12424,8196,4096,16784,12556,8328,4100};     //2PF: purp/lpur
+uint16_t bgp6[] = {29312,25088,20864,16512,29056,24832,20608,16512}; //DBF: yell/orng
+uint16_t bgp7[] = {20872,16644,12416,8192,21004,16776,12548,8320};   //Aracde mode
+
+uint16_t *blockpal[] = {
+	bgp1,bgp2,bgp3,bgp4,bgp5,bgp6,bgp7
+};
 	
 	
 	
@@ -140,9 +153,10 @@ void movedir(entity_t *e, enum Direction dir);
 uint8_t gridmatch(entity_t *e);  //returns number of blocks matched, mods cgrid
 
 
-
+#include "font.h"            //Fontset to use
 #include "gfx/tiles_gfx.h"   //gems_tiles_compressed, explosion_tiles_compressed
 #include "gfx/sprites_gfx.h" //cursor_compressed, grid_compressed
+#include "gfx/bg_gfx.h"      //Background stuffs
 
 /* ---------------------- Put all your globals here ------------------------- */
 gfx_rletsprite_t *gems_spr[gems_tiles_num];
@@ -157,6 +171,24 @@ entity_t player2;
 bool curbuf;
 uint8_t main_timer;
 
+gfx_rletsprite_t *bg_central;
+gfx_rletsprite_t *bg_next;
+gfx_rletsprite_t *bg_score;
+gfx_rletsprite_t *bg_scoref;
+gfx_rletsprite_t *bg_btm8d;
+gfx_rletsprite_t *bg_btm5d;
+gfx_rletsprite_t *bg_btm4d;
+gfx_rletsprite_t *bg_btm3d;
+gfx_rletsprite_t *bg_btm8df;
+gfx_rletsprite_t *bg_btm5df;
+gfx_rletsprite_t *bg_btm4df;
+gfx_rletsprite_t *bg_btm3df;
+gfx_rletsprite_t *bg_top8d;
+gfx_rletsprite_t *bg_top5d;
+gfx_rletsprite_t *bg_top4d;
+gfx_rletsprite_t *bg_top3d;
+
+
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 
 
@@ -166,7 +198,7 @@ void main(void) {
 	options_t options;
 	
 	initgfx();
-	gfx_FillScreen(0x09);
+	gfx_FillScreen(0x01);
 	
 	/* Initialize game variables */
 	
@@ -190,16 +222,49 @@ void main(void) {
 
 /* ========================================================================== */
 
+void palshift(gfx_sprite_t *sprite, uint8_t shiftby) {
+	uint8_t x,y;
+	int size;
+	uint8_t *ptr;
+	
+	ptr = (uint8_t*) sprite;
+	size = ptr[0]*ptr[1];
+	ptr+=2;
+	for(;size;--size,++ptr) ptr[0] +=shiftby;
+}
+
+
+gfx_rletsprite_t* decompAndAllocate(void* cmprsprite) {
+	uint8_t i;
+	void *baseimg,*flipimg,*img;
+	
+	baseimg = (void*) gfx_vbuffer;
+	flipimg = (void*) (*gfx_vbuffer+32768+2);
+	
+	dzx7_Turbo(cmprsprite,baseimg);
+	img = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+	gfx_FlipSpriteY((gfx_sprite_t*) baseimg, (gfx_sprite_t*)flipimg);
+	
+	return img;
+}
+
 void initgfx(void) {
 	uint8_t i;
-	void *baseimg;
+	void *baseimg,*flipimg;
+	uint8_t *ptr;
+	int loop;
 	
 	gfx_Begin();
 	gfx_SetDrawBuffer();
-	gfx_SetTransparentColor(TRANSPARENT_COLOR);
 	ti_CloseAll();
+	//Font data abbreviated
+	gfx_SetFontData(font-(32*8));
+	gfx_SetPalette(tiles_gfx_pal,sizeof tiles_gfx_pal,0);
+	//Palette area at PALSWAP_AREA is initialized on game mode select
 	
 	baseimg = (void*) gfx_vbuffer;
+	flipimg = (void*) (*gfx_vbuffer+32768+2);
+	
 	for (i=0;i<gems_tiles_num;i++) {
 		dzx7_Turbo(gems_tiles_compressed[i],baseimg);
 		gems_spr[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
@@ -212,11 +277,34 @@ void initgfx(void) {
 	cursor_spr = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	grid_spr = malloc(16*16+2);
 	dzx7_Turbo(grid_compressed,grid_spr);
-	//Alloc mem but do not decompress bg tile assets.
-	//Decompression will be done at game start depending on selected game mode.
-	greentile = malloc(32*32+2);
-	cyantile = malloc(32*32+2);
-	curbuf = 1;
+	//Alloc to special area
+	dzx7_Turbo(greentile_compressed,greentile = malloc(32*32+2));
+	dzx7_Turbo(cyantile_compressed,cyantile = malloc(32*32+2));
+	palshift(greentile,PALSWAP_AREA);
+	palshift(cyantile,PALSWAP_AREA);
+	//All those backers and transform
+	bg_central = decompAndAllocate(bg_central_compressed);
+	bg_next    = decompAndAllocate(bg_next_compressed);
+	bg_score   = decompAndAllocate(bg_score_compressed);
+	bg_scoref  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bg_btm8d   = decompAndAllocate(bg_btm8d_compressed);
+	bg_btm8df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bg_btm5d   = decompAndAllocate(bg_btm5d_compressed);
+	bg_btm5df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bg_btm4d   = decompAndAllocate(bg_btm4d_compressed);
+	bg_btm4df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bg_btm3d   = decompAndAllocate(bg_btm3d_compressed);
+	bg_btm3df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bg_top8d   = decompAndAllocate(bg_top8d_compressed);
+	bg_top5d   = decompAndAllocate(bg_top5d_compressed);
+	bg_top4d   = decompAndAllocate(bg_top4d_compressed);
+	bg_top3d   = decompAndAllocate(bg_top3d_compressed);
+	
+	
+	
+	
+	
+	
 }
 
 	
@@ -278,16 +366,12 @@ void gentriad(entity_t *entity) {
 
 //Magic numbers are for 32x32 tiles on a 320x240 display
 //Some conversions were required since the original was a 320x224 display.
-void drawgamebg(uint8_t palette_offset) {
+void drawgamebg(options_t *options) {
 	int x,y;
+	uint8_t x1,x2;
 	uint8_t ix,iy;
 	gfx_sprite_t *ptr;
-	
-	dzx7_Turbo(greentile_compressed,greentile);
-	dzx7_Turbo(cyantile_compressed,cyantile);
-	
-	//Do stuff with palette_offset to modify the tiles. The calling routine
-	//will have set palette_offset in accordance to current game mode.
+	gfx_rletsprite_t *rptr;
 	
 	for(iy=0,y=-8; iy<8; ++iy,y+=32) {
 		for(ix=0,x=0; ix<10; ++ix,x+=32) {
@@ -296,6 +380,61 @@ void drawgamebg(uint8_t palette_offset) {
 			gfx_Sprite(ptr,x,y);
 		}
 	}
+	//Draw NEXT box
+	if (options->players == PLAYER2) {
+		x1 = 118;
+		x2 = 182;
+	} else {
+		x1 = 86;
+		x2 = 214;
+	}
+	gfx_RLETSprite(bg_next,x1,14);
+	if (options->players != PLAYER1) gfx_RLETSprite(bg_next,x2,14);
+		
+		
+		
+		
+	//Draw current score/time indicator box
+	if (options->players == PLAYER2) {
+		 gfx_RLETSprite(bg_central,134,166);
+		 if (options->type == TYPE_FLASH || options->time_trial) {
+			gfx_RLETSprite(bg_top5d,115,117);
+			gfx_RLETSprite(bg_btm5d,157,141);
+			gfx_PrintStringXY("best",130,131);
+		 } else {
+			gfx_RLETSprite(bg_top8d,115,117);
+			gfx_RLETSprite(bg_btm8d,133,141);
+			gfx_PrintStringXY("score",140,131);
+		 }
+	} else {
+		gfx_RLETSprite(bg_central,37,126);
+		if (options->type == TYPE_FLASH || options->time_trial) {
+			gfx_RLETSprite(bg_btm5d,61,141);
+			gfx_PrintStringXY("best",48,131);
+		} else {
+			gfx_RLETSprite(bg_btm8d,37,141);
+			gfx_PrintStringXY("score",44,131);
+		}
+		if (options->players == DOUBLES) {
+			gfx_RLETSprite(bg_central,229,126);
+			if (options->type == TYPE_FLASH || options->time_trial) {
+				gfx_RLETSprite(bg_btm5d,240,141);
+				gfx_PrintStringXY("best",48,131);
+			} else {
+				gfx_RLETSprite(bg_btm8d,236,141);
+				gfx_PrintStringXY("score",44,131);
+			}
+			
+		}
+	}
+	
+	
+	
+	
+	
+	
+	
+	
 }
 
 void rungame(options_t *options) {
@@ -305,6 +444,7 @@ void rungame(options_t *options) {
 	uint8_t timer_p1,timer_p2;
 	kb_key_t kd,kc;
 	uint8_t *ptr;
+	uint16_t *palptr;
 	int longctr;
 	uint8_t flash_active,flash_countdown;
 	uint8_t score_active,score_countdown;
@@ -314,10 +454,17 @@ void rungame(options_t *options) {
 	moveside_delay = MOVESIDE_TIMEOUT;
 	flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
 	//Generate game static background
-	//TODO: Set palette_offset wrt current game mode (in options)
+	
+	if (options->type == TYPE_ARCADE) {
+		palptr = blockpal[6];
+	} else {
+		palptr = blockpal[(options->type-1)*2+options->players];
+	}
+	gfx_SetPalette(palptr,16,PALSWAP_AREA);
+	
 	palette_offset = 0;
 	for(i=0;i<2;++i) {
-		drawgamebg(palette_offset);
+		drawgamebg(options);
 		redrawboard(options);
 		gfx_SwapDraw(); 
 	}
@@ -635,7 +782,7 @@ uint8_t gridmatch(entity_t *e) {
 				}
 			}
 			//Checking diagonal matches (towards bottom-left)
-			for (limidx=((cury>curx)?curx:cury),tempidx=curidx,dist=0;
+			for (limidx=((cury>curx+1)?curx+1:cury),tempidx=curidx,dist=0;
 			limidx; --limidx,tempidx+=(GRID_W-1),++dist) {
 				if (e->grid[tempidx] != t) break;
 			}

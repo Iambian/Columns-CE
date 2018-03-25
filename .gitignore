@@ -4,3 +4,5 @@
 /src/gfx/*.c
 /src/gfx/*.h
 /src/gfx/*.log
+/src/gfx/mainpalette.png
+/src/gfx/tilepalette.png
