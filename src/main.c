@@ -506,15 +506,6 @@ void drawgamebg(options_t *options) {
 			}
 		}
 	}
-	
-	
-//drawSpriteAndClass(diff,*sprite,x,y,offset)
-	
-	
-	
-	
-	
-	
 }
 
 void rungame(options_t *options) {
