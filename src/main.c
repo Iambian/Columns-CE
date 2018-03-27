@@ -21,7 +21,6 @@ enum Difficulty { NOVICE = 3, AMATEUR, PRO,
 enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 
 
-#define TRANSPARENT_COLOR 0xF8
 #define GRIDSTART_X 5
 #define GRIDSTART_Y 5
 // As specified (rather obliquely) in convpng.ini
@@ -139,6 +138,18 @@ uint16_t bgp7[] = {20872,16644,12416,8192,21004,16776,12548,8320};   //Aracde mo
 uint16_t *blockpal[] = {
 	bgp1,bgp2,bgp3,bgp4,bgp5,bgp6,bgp7
 };
+
+uint16_t num0[] = {12300,29725,30365,30621}; //Combo x1 (initial)
+uint16_t num1[] = {272,797,30621,30621}; //Combo x2
+uint16_t num2[] = {384,776,30621,30621}; //Combo x3
+uint16_t num3[] = {25096,30464,30621,30621}; //Combo x4
+uint16_t num4[] = {20608,29952,30476,30621}; //Combo x5
+uint16_t num5[] = {12288,29828,30224,30621}; //Combo x6
+
+uint16_t *numpal[] = {
+	num0,num1,num2,num3,num4,num5
+};
+
 	
 	
 	
@@ -160,6 +171,7 @@ uint8_t gridmatch(entity_t *e);  //returns number of blocks matched, mods cgrid
 #include "gfx/tiles_gfx.h"   //gems_tiles_compressed, explosion_tiles_compressed
 #include "gfx/sprites_gfx.h" //cursor_compressed, grid_compressed
 #include "gfx/bg_gfx.h"      //Background stuffs
+#include "gfx/score_gfx.h"   //Scores
 
 /* ---------------------- Put all your globals here ------------------------- */
 gfx_rletsprite_t *gems_spr[gems_tiles_num];
@@ -190,6 +202,7 @@ gfx_rletsprite_t *bg_top8d;
 gfx_rletsprite_t *bg_top5d;
 gfx_rletsprite_t *bg_top4d;
 gfx_rletsprite_t *bg_top3d;
+gfx_rletsprite_t *scorenum[11]; //0-9 and colon.
 
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
@@ -250,9 +263,12 @@ gfx_rletsprite_t* decompAndAllocate(void* cmprsprite) {
 	
 	return img;
 }
+/* ========================================================================== */
+/* ========================================================================== */
+/* ========================================================================== */
 
 void initgfx(void) {
-	uint8_t i;
+	uint8_t i,j;
 	void *baseimg,*flipimg;
 	uint8_t *ptr;
 	int loop;
@@ -307,11 +323,14 @@ void initgfx(void) {
 	bg_top4d   = decompAndAllocate(bg_top4d_compressed);
 	bg_top3d   = decompAndAllocate(bg_top3d_compressed);
 	
-	
-	
-	
-	
-	
+	for (i=0;i<score_tiles_num;i++) {
+		dzx7_Turbo(score_tiles_compressed[i],baseimg);
+		for(j=0,ptr=baseimg+2;j<(8*16);j++,ptr++) {
+			if (ptr[0] == 12) ptr[0] = 0;  //12 is transparent color in tilepal
+			else ptr[0] += PALSWAP_AREA+8; //Else shift everything up to numpal
+		}
+		scorenum[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+	}
 }
 
 	
