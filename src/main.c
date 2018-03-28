@@ -94,6 +94,12 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #include <decompress.h>
 #include <fileioc.h>
 
+typedef struct numsprite_t {
+	gfx_rletsprite_t *sprite;
+	int ypos;
+	int xpos;
+} numsprite_t;
+
 typedef struct entity_t {
 	enum Players playerid; //
 	unsigned int grid_top; //pixel position. Best use 16 here.
@@ -101,19 +107,23 @@ typedef struct entity_t {
 	uint8_t triad_idx;     //X+Y*GRID_WIDTH, where X,Y is topmost block in triad
 	unsigned int level;    //Player's level
 	unsigned int score;    //player's current score
+	unsigned int jewels;   //Number of jewels total player has blown up
+	uint8_t new_jewels;    //Number of jewels exploded during current cycle
 	uint8_t combo;         //Player's current combo
 	uint8_t matches;       //9 match cycles (matchlen not considered) is level++
 	enum GameState state;  //GM_PLAYMATCH or GM_PLAYMOVE
 	uint8_t cur_delay;     //Unified delay cycles
 	uint8_t drop_max;      //Maximum speed to drop at. Decided by level
 	uint8_t max_types;     //3,4,5
-	unsigned int scoreadd; //Increase score by 1/16 of this much
-	uint8_t scorecycle;    //Loop from 16 to 1. Final score on 1. Inactive on 0.
+	unsigned int scoreadd; //Increase score by this much
 	uint8_t stay_delay;    //from MATCH_TIMEOUT to 0 once triad rests on surface
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
 	uint8_t grid[GRID_SIZE];  //Gem/explosion IDs
 	uint8_t cgrid[GRID_SIZE]; //Board state flags (changing, flashing, etc)
+	numsprite_t nums[5];      //Up to five digits
+	int scoreybase;           //Y position of base scorebox
+	uint8_t scorefallthrough; //Countdown frm 16 for drop. Higher vals ignored
 } entity_t;
 
 typedef struct options_t {
@@ -206,6 +216,7 @@ gfx_rletsprite_t *scorenum[11]; //0-9 and colon.
 
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
+uint8_t numbuf[6];
 
 
 void main(void) {
@@ -540,6 +551,7 @@ void rungame(options_t *options) {
 	uint8_t score_active,score_countdown;
 	uint8_t matches_found;
 	uint8_t palette_offset;
+	int tempscore,x,y;
 	
 RESTARTGAME:
 	
@@ -629,8 +641,54 @@ RESTARTGAME:
 				if (matches_found) {
 					flash_active = 1;
 					flash_countdown = 20;
+					player1->new_jewels = matches_found;
+					//Calculate score -- Not perfect but serviceable.
+					i = matches_found/3;
+					i = (i>3)?3:i;  //Lim 3
+					player1.scoreadd = tempscore = ((int)i) * (player1.level+1) * (player1.combo * 1) * 10;
+					//Extract digits.
+					for (i=0,ptr=numbuf; i<5; i++,ptr++) {
+						ptr[0] = tempscore%10;
+						tempscore /= 10;
+					}
+					//Load digits to buffer.
+					y = 72;  //constant in all cases except 2P:2P
+					if (player1.playerid == PLAYER1) {
+						if (options->players == PLAYER2) {
+							x = 120;  //player 1 in 2P split screen mode
+						} else {
+							x = 64;   //Player 1 in 1P or doubles single column
+					} else {
+						if (options->players == PLAYER2) {
+							x = 160;
+							y = 96;
+						} else {
+							x = 216;
+						}
+					}
+					player1.scorefallthrough = 32;
+					player1.scoreybase = y;
+					t = 0;
+					for (i=5,ptr=numbuf+4;i;i--,ptr--) {
+						y -= 16;
+						if (!(t || ptr[0])) {
+							player1.nums[i].sprite = NULL;
+						} else {
+							player1.nums[i].sprite = numbuf[ptr[0]];
+							t++;
+						}
+						player1.nums[i].ypos = y;
+						player1.nums[i].xpos = x;
+						x += 8;
+					}
+					
+					
+					
+					
+					
 					//Add scoring when it is the thing to do.
 					//
+					
 				} else {
 					//Check if anything is past the top before continuing
 					for (i=t=0; i<GRID_START; ++i) {
