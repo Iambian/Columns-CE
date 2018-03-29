@@ -106,8 +106,9 @@ typedef struct entity_t {
 	uint8_t grid_left;     //px pos. 112 in single, 16/208 in 2player
 	uint8_t triad_idx;     //X+Y*GRID_WIDTH, where X,Y is topmost block in triad
 	unsigned int level;    //Player's level
-	unsigned int score;    //player's current score
-	unsigned int jewels;   //Number of jewels total player has blown up
+	uint8_t score[8];      //player's current score (in digits)
+	uint8_t scoreadd[5];   //5 digits to add to score[3:8]
+	unsigned int jewels;   //Number of jewels total player has blown up (digits)
 	uint8_t new_jewels;    //Number of jewels exploded during current cycle
 	uint8_t combo;         //Player's current combo
 	uint8_t matches;       //9 match cycles (matchlen not considered) is level++
@@ -115,7 +116,6 @@ typedef struct entity_t {
 	uint8_t cur_delay;     //Unified delay cycles
 	uint8_t drop_max;      //Maximum speed to drop at. Decided by level
 	uint8_t max_types;     //3,4,5
-	unsigned int scoreadd; //Increase score by this much
 	uint8_t stay_delay;    //from MATCH_TIMEOUT to 0 once triad rests on surface
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
@@ -124,6 +124,7 @@ typedef struct entity_t {
 	numsprite_t nums[5];      //Up to five digits
 	int scoreybase;           //Y position of base scorebox
 	uint8_t scorefallthrough; //Countdown frm 16 for drop. Higher vals ignored
+	uint8_t updating;         //0=no update scoreboard, 2 and 1 = update (var--)
 } entity_t;
 
 typedef struct options_t {
@@ -212,7 +213,7 @@ gfx_rletsprite_t *bg_top8d;
 gfx_rletsprite_t *bg_top5d;
 gfx_rletsprite_t *bg_top4d;
 gfx_rletsprite_t *bg_top3d;
-gfx_rletsprite_t *scorenum[11]; //0-9 and colon.
+gfx_rletsprite_t *scorenum[score_tiles_num]; //0-9 and colon.
 
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
@@ -336,7 +337,7 @@ void initgfx(void) {
 	
 	for (i=0;i<score_tiles_num;i++) {
 		dzx7_Turbo(score_tiles_compressed[i],baseimg);
-		for(j=0,ptr=baseimg+2;j<(8*16);j++,ptr++) {
+		for(j=0,ptr=((uint8_t*)baseimg)+2;j<(8*16);j++,ptr++) {
 			if (ptr[0] == 12) ptr[0] = 0;  //12 is transparent color in tilepal
 			else ptr[0] += PALSWAP_AREA+8; //Else shift everything up to numpal
 		}
@@ -640,55 +641,53 @@ RESTARTGAME:
 				matches_found = gridmatch(&player1);
 				if (matches_found) {
 					flash_active = 1;
-					flash_countdown = 20;
-					player1->new_jewels = matches_found;
+					flash_countdown = 28;
+					player1.new_jewels = matches_found;
 					//Calculate score -- Not perfect but serviceable.
+					player1.combo++;
 					i = matches_found/3;
 					i = (i>3)?3:i;  //Lim 3
-					player1.scoreadd = tempscore = ((int)i) * (player1.level+1) * (player1.combo * 1) * 10;
+					tempscore = ((int)i) * (player1.level+1) * (player1.combo) * 30;
 					//Extract digits.
 					for (i=0,ptr=numbuf; i<5; i++,ptr++) {
 						ptr[0] = tempscore%10;
 						tempscore /= 10;
 					}
 					//Load digits to buffer.
-					y = 72;  //constant in all cases except 2P:2P
+					y = 111;  //constant in all cases except 1P:2P
 					if (player1.playerid == PLAYER1) {
 						if (options->players == PLAYER2) {
+							y = 87;
 							x = 120;  //player 1 in 2P split screen mode
 						} else {
 							x = 64;   //Player 1 in 1P or doubles single column
+						}
 					} else {
 						if (options->players == PLAYER2) {
 							x = 160;
-							y = 96;
 						} else {
 							x = 216;
 						}
 					}
+					//TODO: Do addscore as 1 byte per digit BCD.
+					//Change score to do 8 digit 1bpd BCD as well.
 					player1.scorefallthrough = 32;
-					player1.scoreybase = y;
 					t = 0;
-					for (i=5,ptr=numbuf+4;i;i--,ptr--) {
+					for (i=0,ptr=numbuf+4;i<5;i++,ptr--) {
 						y -= 16;
+						//dbg_sprintf(dbgout,"Digit pos (%i,%i)\n",x,y);
+						player1.scoreadd[i] = ptr[0];
 						if (!(t || ptr[0])) {
 							player1.nums[i].sprite = NULL;
 						} else {
-							player1.nums[i].sprite = numbuf[ptr[0]];
+							player1.nums[i].sprite = scorenum[ptr[0]];
 							t++;
+							//dbg_sprintf(dbgout,"Digit %i: %i\n",i,ptr[0]);
 						}
 						player1.nums[i].ypos = y;
 						player1.nums[i].xpos = x;
 						x += 8;
 					}
-					
-					
-					
-					
-					
-					//Add scoring when it is the thing to do.
-					//
-					
 				} else {
 					//Check if anything is past the top before continuing
 					for (i=t=0; i<GRID_START; ++i) {
@@ -699,6 +698,7 @@ RESTARTGAME:
 						player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
 						continue;
 					}
+					player1.combo = 0;
 					//Emit triad object.
 					player1.triad_idx = t = (player1.playerid==PLAYER1) ? 2 : 3;
 					dbg_sprintf(dbgout,"Emitting triad objects: ");
@@ -811,6 +811,45 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 		y += TILE_H;
 	}
 }
+// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+void drawscore(entity_t *e, options_t *opt) {
+	uint8_t i;
+	int x,y;
+	int x1,y1,x2,y2;
+	numsprite_t *num;
+	
+	
+	//ONLY IN NON-FLASH MODE.
+	//TODO: FLASH MODE TIMER, COMBO COLORS FOR SCORE MODE
+	if (e->scorefallthrough) {
+		e->scorefallthrough--;
+		y = 111;
+		if (e->playerid == PLAYER1 && opt->players == PLAYER2) y = 87;
+
+		x1 = (e->nums[0]).xpos;
+		x2 = ((e->nums[4]).xpos)+8;
+		y1 = y - 16;
+		y2 = y;
+		gfx_SetColor(1);  //black
+		gfx_FillRectangle(x1,y1,40,16);
+		gfx_SetClipRegion(x1,y1,x2,y2);
+		for (i=0;i<5;i++) {
+			num = &(e->nums[i]);
+			//dbg_sprintf(dbgout,"Digit %i pos (%i,%i)\n",i,num->xpos,num->ypos);
+			if (num->sprite != NULL) {
+				if ((num->ypos < y1) || (e->scorefallthrough < 5)) {
+					num->ypos += 4;
+				}
+			 gfx_RLETSprite(num->sprite,num->xpos,num->ypos);
+			}
+		}
+		gfx_SetClipRegion(0,0,320,240);
+	}
+}
+
+
 
 void redrawboard(options_t *options) {
 	uint8_t i,mask_buf,mask_scr;
@@ -824,12 +863,14 @@ void redrawboard(options_t *options) {
 	}
 	
 	drawgrid(&player1,mask_buf);
-	if (options->players == PLAYER2) drawgrid(&player2,mask_buf);
+	drawscore(&player1,options);
+	if (options->players != PLAYER1) { 
+		drawgrid(&player2,mask_buf);
+		drawscore(&player2,options);
+	}
 	
-	// Put code here which handles the scoreboard depending on the game type
-	// and who's got the score.
-	//
 	
+		
 	curbuf = !curbuf;
 }
 
