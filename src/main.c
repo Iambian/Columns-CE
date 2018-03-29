@@ -106,7 +106,7 @@ typedef struct entity_t {
 	uint8_t grid_left;     //px pos. 112 in single, 16/208 in 2player
 	uint8_t triad_idx;     //X+Y*GRID_WIDTH, where X,Y is topmost block in triad
 	unsigned int level;    //Player's level
-	uint8_t score[8];      //player's current score (in digits)
+	uint8_t score[8];      //player's current score (in digits) LSB-first
 	uint8_t scoreadd[5];   //5 digits to add to score[3:8]
 	unsigned int jewels;   //Number of jewels total player has blown up (digits)
 	uint8_t new_jewels;    //Number of jewels exploded during current cycle
@@ -161,9 +161,135 @@ uint16_t *numpal[] = {
 	num0,num1,num2,num3,num4,num5
 };
 
-	
-	
-	
+#define BG_CENT 0
+#define BG_NEXT 1
+//The arrow points to the right
+#define BG_SCORE 2
+#define BG_SCOREF 3
+#define BG_B8D 4
+#define BG_B8DF 5
+#define BG_B5D 6
+#define BG_B5DF 7
+#define BG_B4D 8
+#define BG_B4DF 9
+#define BG_B3D 10
+#define BG_B3DF 11
+#define BG_T8D 12
+#define BG_T5D 13
+#define BG_T4D 14
+#define BG_T3D 15
+
+#define SOBJ_NEXT 0
+#define SOBJ_SCOREMAIN 1
+#define SOBJ_LEVELMAIN 2
+#define SOBJ_JEWELSMAIN 3
+#define SOBJ_CURSCORE 4
+#define SOBJ_SCORESUB 5
+#define SOBJ_LEVELSUB 6
+#define SOBJ_JEWELSSUB 7
+
+#define PMODE_NORMAL 0
+#define PMODE_FLASH 1
+#define PMODE_SPANE 0
+#define PMODE_DPANE 1 
+
+#define TYPE_USE2PANE
+//[normal/flash][single/dual panes][playerid][objidx][x,y,spriteType]
+uint8_t posarr[2][2][2][8][3]= {
+	{	//Normal (not-flash) mode. Includes arcade mode.
+		{	//Single pane mode (1p,doubles)
+			{	//Player 1
+				{	86,14,BG_NEXT     //Next
+				},{	38,126,BG_CENT    //Scoremain
+				},{	38,166,BG_CENT    //Levelmain
+				},{	38,198,BG_CENT    //Jewelmain
+				},{	62,94,BG_SCORE    //Curscore
+				},{	38,141,BG_B8D     //Scoresub
+				},{	77,181,BG_B3D     //Levelsub
+				},{	69,213,BG_B4D     //Jewlesub
+				}
+			},{	//Player 2
+				{	214,14,BG_NEXT     //Next
+				},{	230,126,BG_CENT    //Scoremain
+				},{	230,166,BG_CENT    //Levelmain
+				},{	230,198,BG_CENT    //Jewelmain
+				},{	211,94,BG_SCOREF   //Curscore
+				},{	213,141,BG_B8DF    //Scoresub
+				},{	212,181,BG_B3DF    //Levelsub
+				},{	212,213,BG_B4DF    //Jewlesub
+				}
+			}
+		},{	//Dual pane mode
+			{	//Player 1
+				{	118,14,BG_NEXT     //Next
+				},{	134,126,BG_CENT    //Scoremain
+				},{	134,166,BG_CENT    //Levelmain
+				},{	134,198,BG_CENT    //Jewelmain
+				},{	115,70,BG_SCOREF   //Curscore
+				},{	117,117,BG_T8D     //Scoresub
+				},{	115,157,BG_T3D     //Levelsub
+				},{	115,189,BG_T4D     //Jewlesub
+				}
+			},{	//Player 2
+				{	182,14,BG_NEXT     //Next
+				},{	134,126,BG_CENT    //Scoremain
+				},{	134,166,BG_CENT    //Levelmain
+				},{	134,198,BG_CENT    //Jewelmain
+				},{	158,94,BG_SCORE    //Curscore
+				},{	134,141,BG_B8D     //Scoresub
+				},{	173,181,BG_B3D     //Levelsub
+				},{	165,213,BG_B4D     //Jewlesub
+				}
+			}
+		}
+	},{	//Flash columns mode
+		{	//Single pane mode (1p,doubles)
+			{	//Player 1
+				{	86,14,BG_NEXT     //Next
+				},{	38,126,BG_CENT    //Bestmain
+				},{	38,166,BG_CENT    //Levelmain
+				},{	38,198,BG_CENT    //Classmain
+				},{	62,94,BG_SCORE    //Curtime
+				},{	61,141,BG_B5D     //Bestsub
+				},{	77,181,BG_B3D     //Levelsub
+				},{	77,213,BG_B3D     //Classsub
+				}
+			},{	//Player 2
+				{	214,14,BG_NEXT     //Next
+				},{	229,126,BG_CENT    //Bestmain
+				},{	230,166,BG_CENT    //Levelmain
+				},{	230,198,BG_CENT    //Classmain
+				},{	211,94,BG_SCOREF   //Curtime
+				},{	212,141,BG_B5DF    //Bestsub
+				},{	212,181,BG_B3DF    //Levelsub
+				},{	212,213,BG_B3DF    //Classsub
+				}
+			}
+		},{	//Dual pane mode
+			{	//Player 1
+				{	118,14,BG_NEXT     //Next
+				},{	134,126,BG_CENT    //Bestmain
+				},{	134,166,BG_CENT    //Levelmain
+				},{	134,198,BG_CENT    //Classmain
+				},{	115,70,BG_SCOREF   //Curtime
+				},{	115,117,BG_T5D     //Bestsub
+				},{	115,157,BG_T3D     //Levelsub
+				},{	115,189,BG_T3D     //Classsub
+				}
+			},{	//Player 2
+				{	182,14,BG_NEXT     //Next
+				},{	134,126,BG_CENT    //Bestmain
+				},{	134,166,BG_CENT    //Levelmain
+				},{	134,198,BG_CENT    //Classmain
+				},{	158,94,BG_SCORE    //Curtime
+				},{	157,141,BG_B5D     //Bestsub
+				},{	173,181,BG_B3D     //Levelsub
+				},{	173,213,BG_B3D     //Classsub
+				}
+			}
+		}
+	}
+};
 
 void keywait(void) { while (kb_AnyKey()); }
 void waitanykey(void) {	keywait(); 	while (!kb_AnyKey()); keywait(); }
@@ -202,18 +328,20 @@ gfx_rletsprite_t *bg_next;
 gfx_rletsprite_t *bg_score;
 gfx_rletsprite_t *bg_scoref;
 gfx_rletsprite_t *bg_btm8d;
-gfx_rletsprite_t *bg_btm5d;
-gfx_rletsprite_t *bg_btm4d;
-gfx_rletsprite_t *bg_btm3d;
 gfx_rletsprite_t *bg_btm8df;
+gfx_rletsprite_t *bg_btm5d;
 gfx_rletsprite_t *bg_btm5df;
+gfx_rletsprite_t *bg_btm4d;
 gfx_rletsprite_t *bg_btm4df;
+gfx_rletsprite_t *bg_btm3d;
 gfx_rletsprite_t *bg_btm3df;
 gfx_rletsprite_t *bg_top8d;
 gfx_rletsprite_t *bg_top5d;
 gfx_rletsprite_t *bg_top4d;
 gfx_rletsprite_t *bg_top3d;
-gfx_rletsprite_t *scorenum[score_tiles_num]; //0-9 and colon.
+gfx_rletsprite_t *bgspr[16];
+gfx_rletsprite_t *scorenum1[score_tiles_num]; //0-9 and colon.
+gfx_rletsprite_t *scorenum2[score_tiles_num]; //0-9 and colon.
 
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
@@ -318,30 +446,38 @@ void initgfx(void) {
 	palshift(greentile,PALSWAP_AREA);
 	palshift(cyantile,PALSWAP_AREA);
 	//All those backers and transform
-	bg_central = decompAndAllocate(bg_central_compressed);
-	bg_next    = decompAndAllocate(bg_next_compressed);
-	bg_score   = decompAndAllocate(bg_score_compressed);
-	bg_scoref  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
-	bg_btm8d   = decompAndAllocate(bg_btm8d_compressed);
-	bg_btm8df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
-	bg_btm5d   = decompAndAllocate(bg_btm5d_compressed);
-	bg_btm5df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
-	bg_btm4d   = decompAndAllocate(bg_btm4d_compressed);
-	bg_btm4df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
-	bg_btm3d   = decompAndAllocate(bg_btm3d_compressed);
-	bg_btm3df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
-	bg_top8d   = decompAndAllocate(bg_top8d_compressed);
-	bg_top5d   = decompAndAllocate(bg_top5d_compressed);
-	bg_top4d   = decompAndAllocate(bg_top4d_compressed);
-	bg_top3d   = decompAndAllocate(bg_top3d_compressed);
+	bgspr[0]  = bg_central = decompAndAllocate(bg_central_compressed);
+	bgspr[1]  = bg_next    = decompAndAllocate(bg_next_compressed);
+	bgspr[2]  = bg_score   = decompAndAllocate(bg_score_compressed);
+	bgspr[3]  = bg_scoref  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bgspr[4]  = bg_btm8d   = decompAndAllocate(bg_btm8d_compressed);
+	bgspr[5]  = bg_btm8df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bgspr[6]  = bg_btm5d   = decompAndAllocate(bg_btm5d_compressed);
+	bgspr[7]  = bg_btm5df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bgspr[8]  = bg_btm4d   = decompAndAllocate(bg_btm4d_compressed);
+	bgspr[9]  = bg_btm4df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bgspr[10] = bg_btm3d   = decompAndAllocate(bg_btm3d_compressed);
+	bgspr[11] = bg_btm3df  = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)flipimg);
+	bgspr[12] = bg_top8d   = decompAndAllocate(bg_top8d_compressed);
+	bgspr[13] = bg_top5d   = decompAndAllocate(bg_top5d_compressed);
+	bgspr[14] = bg_top4d   = decompAndAllocate(bg_top4d_compressed);
+	bgspr[15] = bg_top3d   = decompAndAllocate(bg_top3d_compressed);
 	
 	for (i=0;i<score_tiles_num;i++) {
+		//Player 1 digits
 		dzx7_Turbo(score_tiles_compressed[i],baseimg);
 		for(j=0,ptr=((uint8_t*)baseimg)+2;j<(8*16);j++,ptr++) {
 			if (ptr[0] == 12) ptr[0] = 0;  //12 is transparent color in tilepal
 			else ptr[0] += PALSWAP_AREA+8; //Else shift everything up to numpal
 		}
-		scorenum[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+		scorenum1[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+		//Player2 digits
+		dzx7_Turbo(score_tiles_compressed[i],baseimg);
+		for(j=0,ptr=((uint8_t*)baseimg)+2;j<(8*16);j++,ptr++) {
+			if (ptr[0] == 12) ptr[0] = 0;   //12 is transparent color in tilepal
+			else ptr[0] += PALSWAP_AREA+12; //Else shift everything up to numpal
+		}
+		scorenum2[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	}
 }
 
@@ -413,14 +549,40 @@ void drawSpriteAndClass(enum Difficulty diff, gfx_rletsprite_t *sprite, int x, i
 }
 
 
+void drawbgspriteobj(uint8_t isflash, uint8_t idx, uint8_t *ptr) {
+	uint8_t x,y,id;
+	char *s;
+	x = ptr[0];
+	y = ptr[1];
+	id= ptr[2];
+	gfx_RLETSprite(bgspr[id],x,y);
+	s = NULL;
+	if (id==BG_CENT){
+		if (idx == SOBJ_SCOREMAIN) {
+			if (isflash) s = "best";
+			else         s = "score";
+		} else if (idx == SOBJ_LEVELMAIN) {
+			s = "level";
+		} else if (idx == SOBJ_JEWELSMAIN) {
+			if (isflash) s = "class";
+			else         s = "jewels";
+		}
+		if (s!=NULL) {
+			gfx_PrintStringXY(s,x+((52-gfx_GetStringWidth(s))>>1),y+5);
+		}
+	}
+}
+
+
 //Magic numbers are for 32x32 tiles on a 320x240 display
 //Some conversions were required since the original was a 320x224 display.
 void drawgamebg(options_t *options) {
 	int x,y;
 	uint8_t x1,x2;
 	uint8_t ix,iy;
+	uint8_t mode,panes;
 	gfx_sprite_t *ptr;
-	gfx_rletsprite_t *rptr;
+	uint8_t i;
 	
 	for(iy=0,y=-8; iy<8; ++iy,y+=32) {
 		for(ix=0,x=0; ix<10; ++ix,x+=32) {
@@ -432,110 +594,12 @@ void drawgamebg(options_t *options) {
 	
 	gfx_SetTextFGColor(FONT_GOLD);
 	
-	//Draw NEXT box
-	if (options->players == PLAYER2) {
-		x1 = 118;
-		x2 = 182;
-	} else {
-		x1 = 86;
-		x2 = 214;
-	}
-	gfx_RLETSprite(bg_next,x1,14);
-	if (options->players != PLAYER1) gfx_RLETSprite(bg_next,x2,14);
-		
-	//Draw current score/timer box
-	
-	if (options->players == PLAYER2) {
-		gfx_RLETSprite(bg_scoref,115,70); //P1
-		gfx_RLETSprite(bg_score,158,94);  //P2
-	} else {
-		gfx_RLETSprite(bg_score,62,94);  //P1
-		if (options->players == DOUBLES) {
-			gfx_RLETSprite(bg_scoref,211,94);  //P2
-		}
-	}
-		
-	//Draw current score/time indicator box
-	if (options->players == PLAYER2) {
-		 gfx_RLETSprite(bg_central,134,126);
-		 if (options->type == TYPE_FLASH) {
-			gfx_RLETSprite(bg_top5d,115,117);
-			gfx_RLETSprite(bg_btm5d,157,141);
-			gfx_PrintStringXY("best",144,131);
-		 } else {
-			gfx_RLETSprite(bg_top8d,115,117);
-			gfx_RLETSprite(bg_btm8d,133,141);
-			gfx_PrintStringXY("score",140,131);
-		 }
-	} else {
-		gfx_RLETSprite(bg_central,37,126);
-		if (options->type == TYPE_FLASH) {
-			gfx_RLETSprite(bg_btm5d,61,141);
-			gfx_PrintStringXY("best",48,131);
-		} else {
-			gfx_RLETSprite(bg_btm8d,37,141);
-			gfx_PrintStringXY("score",44,131);
-		}
-		if (options->players == DOUBLES) {
-			gfx_RLETSprite(bg_central,230,126);
-			if (options->type == TYPE_FLASH) {
-				gfx_RLETSprite(bg_btm5df,212,141);
-				gfx_PrintStringXY("best",240,131);
-			} else {
-				gfx_RLETSprite(bg_btm8df,212,141);
-				gfx_PrintStringXY("score",236,131);
-			}
-		}
-	}
-	
-	//Display current level
-	if (options->players == PLAYER2) {
-		gfx_RLETSprite(bg_central,134,166);
-		gfx_RLETSprite(bg_top3d,115,157);
-		gfx_RLETSprite(bg_btm3d,173,181);
-		gfx_PrintStringXY("level",140,171);
-	} else {
-		gfx_RLETSprite(bg_central,38,166);
-		gfx_RLETSprite(bg_btm3d,77,181);
-		gfx_PrintStringXY("level",44,171);
-		if (options->players == DOUBLES) {
-			gfx_RLETSprite(bg_central,230,166);
-			gfx_RLETSprite(bg_btm3df,212,181);
-			gfx_PrintStringXY("level",236,171);
-		}
-	}
-	
-	//Display current jewels/class
-	if (options->players == PLAYER2) {
-		gfx_RLETSprite(bg_central,134,198);
-		if (options->type == TYPE_FLASH) {
-			gfx_PrintStringXY("class",140,203);
-			drawSpriteAndClass(options->p1_class,bg_top3d,115,189,2);
-			drawSpriteAndClass(options->p2_class,bg_btm3d,173,213,0);
-		} else {
-			gfx_PrintStringXY("jewels",136,203);
-			gfx_RLETSprite(bg_top4d,115,189);
-			gfx_RLETSprite(bg_btm4d,165,213);
-		}
-	} else {
-		gfx_RLETSprite(bg_central,38,198);
-		if (options->type == TYPE_FLASH) {
-			gfx_PrintStringXY("class",44,203);
-			drawSpriteAndClass(options->p1_class,bg_btm3d,77,213,0);
-		} else {
-			gfx_PrintStringXY("jewels",40,203);
-			gfx_RLETSprite(bg_btm4d,69,213);
-		}
-		if (options->players == DOUBLES) {
-			gfx_RLETSprite(bg_central,230,198);
-			if (options->type == TYPE_FLASH) {
-				gfx_PrintStringXY("class",236,203);
-				drawSpriteAndClass(options->p2_class,bg_btm3df,212,213,0);
-			} else {
-				gfx_PrintStringXY("jewels",232,203);
-				gfx_RLETSprite(bg_btm4df,212,213);
-			}
-		}
+	mode = options->type == TYPE_FLASH; //1 for flash, 0 for anything else.
+	panes = ((options->players == PLAYER2) || (options->type == TYPE_ARCADE));
+	for (i=0;i<8;i++) {
+		drawbgspriteobj(mode, i, &(posarr[mode][panes][0][i][0]));
+		if (options->players == DOUBLES || panes) 
+			drawbgspriteobj(mode, i, &(posarr[mode][panes][1][i][0]));
 	}
 }
 
@@ -568,6 +632,9 @@ RESTARTGAME:
 	gfx_SetPalette(palptr,16,PALSWAP_AREA);
 	
 	palette_offset = 0;
+	player1.updating = 2;
+	if (options->type == TYPE_ARCADE || options->players == PLAYER2)
+		player2.updating = 2;
 	for(i=0;i<2;++i) {
 		drawgamebg(options);
 		redrawboard(options);
@@ -645,7 +712,7 @@ RESTARTGAME:
 					player1.new_jewels = matches_found;
 					//Calculate score -- Not perfect but serviceable.
 					player1.combo++;
-					i = matches_found/3;
+					i = (matches_found+2)/3;
 					i = (i>3)?3:i;  //Lim 3
 					tempscore = ((int)i) * (player1.level+1) * (player1.combo) * 30;
 					//Extract digits.
@@ -669,8 +736,7 @@ RESTARTGAME:
 							x = 216;
 						}
 					}
-					//TODO: Do addscore as 1 byte per digit BCD.
-					//Change score to do 8 digit 1bpd BCD as well.
+					//Process digits into sprites then buffer them.
 					player1.scorefallthrough = 32;
 					t = 0;
 					for (i=0,ptr=numbuf+4;i<5;i++,ptr--) {
@@ -680,7 +746,11 @@ RESTARTGAME:
 						if (!(t || ptr[0])) {
 							player1.nums[i].sprite = NULL;
 						} else {
-							player1.nums[i].sprite = scorenum[ptr[0]];
+							if (player1.playerid == PLAYER1) {
+								player1.nums[i].sprite = scorenum1[ptr[0]];
+							} else {
+								player1.nums[i].sprite = scorenum2[ptr[0]];
+							}
 							t++;
 							//dbg_sprintf(dbgout,"Digit %i: %i\n",i,ptr[0]);
 						}
@@ -688,6 +758,10 @@ RESTARTGAME:
 						player1.nums[i].xpos = x;
 						x += 8;
 					}
+					//Pick correct palette for said sprite
+					if (player1.combo>6) palptr = num5;
+					else palptr = numpal[player1.combo-1];
+					gfx_SetPalette(palptr,8,PALSWAP_AREA + 16);
 				} else {
 					//Check if anything is past the top before continuing
 					for (i=t=0; i<GRID_START; ++i) {
@@ -814,11 +888,31 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+void printuint(int num, int x,int y,uint8_t digits) {
+	uint8_t i,t;
+	uint8_t buf[8];
+	
+	for (i=0;i<digits;i++) {
+		buf[i] = num%10;
+		num = num/10;
+	}
+	gfx_SetTextXY(x,y);
+	t=0;
+	for (i=digits;i;i--) {
+		if (i==1) t++;
+		if (!(t||buf[i-1])) gfx_PrintChar(' ');
+		else                gfx_PrintChar(buf[i-1]+'0'),++t;
+		dbg_sprintf(dbgout,"* Emit digit %i: %i\n",i,buf[i-1]);
+	}
+}
+
 void drawscore(entity_t *e, options_t *opt) {
-	uint8_t i;
+	uint8_t i,j,*ptr,t;
 	int x,y;
 	int x1,y1,x2,y2;
 	numsprite_t *num;
+	uint8_t isflash,isdual,imgid;
+	char *s;
 	
 	
 	//ONLY IN NON-FLASH MODE.
@@ -846,6 +940,70 @@ void drawscore(entity_t *e, options_t *opt) {
 			}
 		}
 		gfx_SetClipRegion(0,0,320,240);
+	}
+	if (e->updating) {
+		e->updating--;
+		gfx_SetTextFGColor(FONT_GOLD);
+		gfx_SetTextBGColor(1);
+		isflash = opt->type == TYPE_FLASH;
+		isdual = ((opt->players == PLAYER2) || (opt->type == TYPE_ARCADE));
+		for (i=SOBJ_SCORESUB;i<(SOBJ_JEWELSSUB+1);i++) {
+			ptr = &(posarr[isflash][isdual][e->playerid][i][0]);
+			x = ptr[0]+2;
+			y = ptr[1]+2;
+			imgid = ptr[2];
+			switch (imgid) {
+				case BG_B8DF:
+				case BG_B5DF:
+				case BG_B4DF:
+				case BG_B3DF:
+				case BG_T8D:
+				case BG_T5D:
+				case BG_T4D:
+				case BG_T3D: x +=2; break;
+				default: break;
+			}
+			t = 0;
+			if (i == SOBJ_SCORESUB) {
+				if (!isflash) {
+					e->score[0] = 0;
+					e->score[1] = 0;
+					e->score[2] = 9;
+					e->score[3] = 0;
+					e->score[4] = 0;
+					e->score[5] = 0;
+					e->score[6] = 0;
+					e->score[7] = 0;
+					gfx_SetTextXY(x,y);
+					for (j=8;j;j--) {
+						if (j==1) ++t;
+						if (!(t||(e->score[j-1]))) {
+							gfx_PrintChar(' ');
+						}
+						else {
+							gfx_PrintChar((e->score[j-1])+0x030);
+							++t;
+						}
+					}
+				} else {
+					//Print time remain
+				}
+			} else if (i == SOBJ_LEVELSUB) {
+				printuint(e->level,x,y,3);
+			} else { //Print jewels/class
+				if (isflash) {
+					switch (e->max_types) {
+						case NOVICE: s = "NOV"; break;
+						case AMATEUR:s = "AMA"; break;
+						case PRO:    s = "PRO"; break;
+						default:     s = "!!!"; break;
+					}
+					gfx_PrintStringXY(s,x,y);
+				} else {
+					printuint(e->jewels,x,y,4);
+				}
+			}
+		}
 	}
 }
 
