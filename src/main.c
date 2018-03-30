@@ -27,6 +27,7 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define FONT_WHITE 2
 #define FONT_GOLD 3
 #define FONT_CYAN 4
+//original NOV 50, arcade 35,
 
 #define GRID_W 6
 #define GRID_H 15
@@ -47,6 +48,10 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define TILE_FLASHING (1<<5)
 #define TILE_HALFLINGS (1<<4)
 #define TILE_TARGET_GEM (1<<3)
+
+#define UPDATE_SCORE ((1<<0)|(1<<4))
+#define UPDATE_LEVEL ((1<<1)|(1<<5))
+#define UPDATE_JEWELS ((1<<2)|(1<<6))
 
 #define P1_GRIDLEFT 16
 #define P2_GRIDLEFT 208
@@ -109,7 +114,6 @@ typedef struct entity_t {
 	uint8_t score[8];      //player's current score (in digits) LSB-first
 	uint8_t scoreadd[5];   //5 digits to add to score[3:8]
 	unsigned int jewels;   //Number of jewels total player has blown up (digits)
-	uint8_t new_jewels;    //Number of jewels exploded during current cycle
 	uint8_t combo;         //Player's current combo
 	uint8_t matches;       //9 match cycles (matchlen not considered) is level++
 	enum GameState state;  //GM_PLAYMATCH or GM_PLAYMOVE
@@ -124,7 +128,7 @@ typedef struct entity_t {
 	numsprite_t nums[5];      //Up to five digits
 	int scoreybase;           //Y position of base scorebox
 	uint8_t scorefallthrough; //Countdown frm 16 for drop. Higher vals ignored
-	uint8_t updating;         //0=no update scoreboard, 2 and 1 = update (var--)
+	uint8_t updating;         //Flags based on UPDATE_XXXX defines
 } entity_t;
 
 typedef struct options_t {
@@ -616,7 +620,7 @@ void rungame(options_t *options) {
 	uint8_t score_active,score_countdown;
 	uint8_t matches_found;
 	uint8_t palette_offset;
-	int tempscore,x,y;
+	int tempscore,x,y,templevel;
 	
 RESTARTGAME:
 	
@@ -632,9 +636,9 @@ RESTARTGAME:
 	gfx_SetPalette(palptr,16,PALSWAP_AREA);
 	
 	palette_offset = 0;
-	player1.updating = 2;
+	player1.updating = UPDATE_SCORE|UPDATE_LEVEL|UPDATE_JEWELS;
 	if (options->type == TYPE_ARCADE || options->players == PLAYER2)
-		player2.updating = 2;
+		player2.updating = UPDATE_SCORE|UPDATE_LEVEL|UPDATE_JEWELS;;
 	for(i=0;i<2;++i) {
 		drawgamebg(options);
 		redrawboard(options);
@@ -691,6 +695,24 @@ RESTARTGAME:
 			if (flash_active) {
 				if (!--flash_countdown) {
 					flash_active = 0;
+					//Add to score now.
+					for (i=t=0;i<8;i++) {
+						if (i<5) {
+							t = player1.score[i] + player1.scoreadd[i] + t;
+							player1.scoreadd[i] = 0;
+						}
+						player1.score[i] = t%10;
+						t = t/10;
+					}
+					player1.updating |= (UPDATE_SCORE|UPDATE_JEWELS);
+					if (options->type != TYPE_FLASH) {
+						templevel = (options->type == TYPE_ARCADE) ? 35 : 50;
+						templevel = player1.jewels / templevel;
+						if (templevel != player1.level) {
+							player1.level = templevel;
+							player1.updating |= UPDATE_LEVEL;
+						}
+					}
 					for (i=0; i<GRID_SIZE; ++i) {
 						if (player1.cgrid[i] & TILE_FLASHING) {
 							player1.cgrid[i] = CHANGE_BUF1|CHANGE_BUF2;
@@ -705,11 +727,12 @@ RESTARTGAME:
 			//
 			//If match timed out, check board for matches proceed to place new triad.
 			if (!--(player1.cur_delay)) {
-				matches_found = gridmatch(&player1);
+				matches_found = gridmatch(&player1);				
 				if (matches_found) {
 					flash_active = 1;
 					flash_countdown = 28;
-					player1.new_jewels = matches_found;
+					player1.jewels += matches_found;
+					if (player1.jewels > 9999) player1.jewels = 9999; //limit
 					//Calculate score -- Not perfect but serviceable.
 					player1.combo++;
 					i = (matches_found+2)/3;
@@ -717,7 +740,7 @@ RESTARTGAME:
 					tempscore = ((int)i) * (player1.level+1) * (player1.combo) * 30;
 					//Extract digits.
 					for (i=0,ptr=numbuf; i<5; i++,ptr++) {
-						ptr[0] = tempscore%10;
+						player1.scoreadd[i] = ptr[0] = tempscore%10;
 						tempscore /= 10;
 					}
 					//Load digits to buffer.
@@ -742,7 +765,6 @@ RESTARTGAME:
 					for (i=0,ptr=numbuf+4;i<5;i++,ptr--) {
 						y -= 16;
 						//dbg_sprintf(dbgout,"Digit pos (%i,%i)\n",x,y);
-						player1.scoreadd[i] = ptr[0];
 						if (!(t || ptr[0])) {
 							player1.nums[i].sprite = NULL;
 						} else {
@@ -902,7 +924,7 @@ void printuint(int num, int x,int y,uint8_t digits) {
 		if (i==1) t++;
 		if (!(t||buf[i-1])) gfx_PrintChar(' ');
 		else                gfx_PrintChar(buf[i-1]+'0'),++t;
-		dbg_sprintf(dbgout,"* Emit digit %i: %i\n",i,buf[i-1]);
+		//dbg_sprintf(dbgout,"* Emit digit %i: %i\n",i,buf[i-1]);
 	}
 }
 
@@ -942,7 +964,6 @@ void drawscore(entity_t *e, options_t *opt) {
 		gfx_SetClipRegion(0,0,320,240);
 	}
 	if (e->updating) {
-		e->updating--;
 		gfx_SetTextFGColor(FONT_GOLD);
 		gfx_SetTextBGColor(1);
 		isflash = opt->type == TYPE_FLASH;
@@ -964,16 +985,8 @@ void drawscore(entity_t *e, options_t *opt) {
 				default: break;
 			}
 			t = 0;
-			if (i == SOBJ_SCORESUB) {
+			if (i == SOBJ_SCORESUB && (e->updating&UPDATE_SCORE)) {
 				if (!isflash) {
-					e->score[0] = 0;
-					e->score[1] = 0;
-					e->score[2] = 9;
-					e->score[3] = 0;
-					e->score[4] = 0;
-					e->score[5] = 0;
-					e->score[6] = 0;
-					e->score[7] = 0;
 					gfx_SetTextXY(x,y);
 					for (j=8;j;j--) {
 						if (j==1) ++t;
@@ -988,9 +1001,12 @@ void drawscore(entity_t *e, options_t *opt) {
 				} else {
 					//Print time remain
 				}
-			} else if (i == SOBJ_LEVELSUB) {
+			} else if (i == SOBJ_LEVELSUB && (e->updating&UPDATE_LEVEL)) {
+				//Pring levels
 				printuint(e->level,x,y,3);
-			} else { //Print jewels/class
+			} else if (i == SOBJ_JEWELSSUB && (e->updating&UPDATE_JEWELS)) {
+				//Print jewels/class
+				dbg_sprintf(dbgout,"Updating jewels: %i\n",e->jewels);
 				if (isflash) {
 					switch (e->max_types) {
 						case NOVICE: s = "NOV"; break;
@@ -1004,6 +1020,7 @@ void drawscore(entity_t *e, options_t *opt) {
 				}
 			}
 		}
+		e->updating >>= 4;
 	}
 }
 
