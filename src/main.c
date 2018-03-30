@@ -52,6 +52,7 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define UPDATE_SCORE ((1<<0)|(1<<4))
 #define UPDATE_LEVEL ((1<<1)|(1<<5))
 #define UPDATE_JEWELS ((1<<2)|(1<<6))
+#define UPDATE_NEXT ((1<<3)|(1<<7))
 
 #define P1_GRIDLEFT 16
 #define P2_GRIDLEFT 208
@@ -727,6 +728,16 @@ RESTARTGAME:
 			//
 			//If match timed out, check board for matches proceed to place new triad.
 			if (!--(player1.cur_delay)) {
+				//Check if anything is past the top before continuing
+				for (i=t=0; i<GRID_START; ++i) {
+					if (player1.grid[i] != GRID_EMPTY) t = 1;
+				}
+				if (t) {
+					player1.state = GM_GAMEOVER;
+					player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
+					continue;
+				}
+				
 				matches_found = gridmatch(&player1);				
 				if (matches_found) {
 					flash_active = 1;
@@ -760,7 +771,7 @@ RESTARTGAME:
 						}
 					}
 					//Process digits into sprites then buffer them.
-					player1.scorefallthrough = 32;
+					player1.scorefallthrough = 40;
 					t = 0;
 					for (i=0,ptr=numbuf+4;i<5;i++,ptr--) {
 						y -= 16;
@@ -785,15 +796,6 @@ RESTARTGAME:
 					else palptr = numpal[player1.combo-1];
 					gfx_SetPalette(palptr,8,PALSWAP_AREA + 16);
 				} else {
-					//Check if anything is past the top before continuing
-					for (i=t=0; i<GRID_START; ++i) {
-						if (player1.grid[i] != GRID_EMPTY) t = 1;
-					}
-					if (t) {
-						player1.state = GM_GAMEOVER;
-						player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
-						continue;
-					}
 					player1.combo = 0;
 					//Emit triad object.
 					player1.triad_idx = t = (player1.playerid==PLAYER1) ? 2 : 3;
@@ -829,7 +831,8 @@ RESTARTGAME:
 				}
 				player1.grid[player1.triad_idx] = t;
 			}
-			//
+			//keep updating NEXT until a triad is finally generated.
+			if (!player1.next_triad[0]) player1.updating |= UPDATE_NEXT;
 			idx = player1.triad_idx;
 			
 			//Check if the spot below triad is empty or not on bottom row.
@@ -968,6 +971,21 @@ void drawscore(entity_t *e, options_t *opt) {
 		gfx_SetTextBGColor(1);
 		isflash = opt->type == TYPE_FLASH;
 		isdual = ((opt->players == PLAYER2) || (opt->type == TYPE_ARCADE));
+		
+		if (e->updating&UPDATE_NEXT) {
+			ptr = &(posarr[isflash][isdual][e->playerid][0][0]);
+			x = ptr[0]+2;
+			y = ptr[1]+2;
+			for (i=0,j=e->triad_idx;i<3;i++,j+=GRID_W) {
+				if (e->next_triad[0]) {
+					t = e->next_triad[i]-GRID_GEM1;
+				} else {
+					t = e->grid[j]-GRID_GEM1;
+				}
+				gfx_RLETSprite_NoClip(gems_spr[t],x,y);
+				y+=16;
+			}
+		}
 		for (i=SOBJ_SCORESUB;i<(SOBJ_JEWELSSUB+1);i++) {
 			ptr = &(posarr[isflash][isdual][e->playerid][i][0]);
 			x = ptr[0]+2;
