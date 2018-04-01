@@ -166,6 +166,9 @@ uint16_t *numpal[] = {
 	num0,num1,num2,num3,num4,num5
 };
 
+char *mainmenu[] = {" select "," arcade"," menu"," options"," quit"};
+uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
+
 #define BG_CENT 0
 #define BG_NEXT 1
 //The arrow points to the right
@@ -308,12 +311,13 @@ void falldown(entity_t *e);
 void movedir(entity_t *e, enum Direction dir);
 uint8_t gridmatch(entity_t *e);  //returns number of blocks matched, mods cgrid
 
-
+/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 #include "font.h"            //Fontset to use
 #include "gfx/tiles_gfx.h"   //gems_tiles_compressed, explosion_tiles_compressed
 #include "gfx/sprites_gfx.h" //cursor_compressed, grid_compressed
 #include "gfx/bg_gfx.h"      //Background stuffs
 #include "gfx/score_gfx.h"   //Scores
+#include "gfx/title_gfx.h"   //Title graphics. Large enough to have own gravity
 
 /* ---------------------- Put all your globals here ------------------------- */
 gfx_rletsprite_t *gems_spr[gems_tiles_num];
@@ -327,6 +331,8 @@ entity_t player1;
 entity_t player2;
 bool curbuf;
 uint8_t main_timer;
+
+gfx_rletsprite_t *titlebanner;
 
 gfx_rletsprite_t *bg_central;
 gfx_rletsprite_t *bg_next;
@@ -352,16 +358,47 @@ gfx_rletsprite_t *scorenum2[score_tiles_num]; //0-9 and colon.
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 uint8_t numbuf[6];
 
+void* setnewtitle() {
+	if (randInt(0,1)) return title1_compressed;
+	else return title2_compressed;
+}
+int randI(int imin,int imax) {  //Because apparently randInt is actually a macro.
+	return randInt(imin,imax);
+}
 
 void main(void) {
-	uint8_t i;
+	uint8_t i,y,rebuilding,gamestate;
 	kb_key_t kd,kc;
 	options_t options;
+	void *titleptr;
+	uint8_t curopt,maxopt;
+	uint8_t debounce;
 	
+	//Randomize the RNG
+	asm("	LD A,R");  //Grab semirandom value from register R
+	asm("	LD B,A");  //And seed _RandInt by running it R times.
+	asm("__loop13487:");
+	asm("	PUSH BC");
+	asm("		LD BC,255");
+	asm("		PUSH BC");
+	asm("		LD BC,0");
+	asm("		PUSH BC");
+	asm("		CALL _randI");
+	asm("		POP BC");
+	asm("		POP BC");
+	asm("	POP BC");
+	asm("	DJNZ __loop13487");
+
 	initgfx();
 	gfx_FillScreen(0x01);
 	
 	/* Initialize game variables */
+	titleptr = setnewtitle();
+	rebuilding = 2;
+	gamestate = 0;
+	debounce = 0;
+	curopt = 0;
+	maxopt = 0;
 	
 	options.type = TYPE_ORIGINAL;
 	options.players = PLAYER1;
@@ -373,8 +410,70 @@ void main(void) {
 	options.bgm = 0;
 	
 	initgamestate(&options);
-	rungame(&options);
 	
+	while (1) {
+		kb_Scan();
+		kc = kb_Data[1];
+		kd = kb_Data[7];
+		if (kc|kd) {
+			if (debounce) kc = kd = 0;
+			debounce = 1;
+		} else debounce = 0;
+		
+		if (gamestate == GM_TITLE) {
+			if (rebuilding) {
+				rebuilding--;
+				dzx7_Turbo(titleptr,gfx_vbuffer);
+				gfx_RLETSprite(titlebanner,48,16);
+				gfx_SwapDraw();
+			} else {
+				if (kc&kb_Mode) break;
+				if (kc) gamestate = GM_MAINMENU;
+				curopt = 0;
+				//handle keys here including moving on to next.
+			}
+		} else if (gamestate == GM_MAINMENU) { //Menu on the title screen
+			if (kc&kb_Mode) break;
+			gfx_SetTextFGColor(2);
+			gfx_SetColor(2);
+			gfx_FillRectangle_NoClip(112,137,96,69); //8px taller, downward
+			gfx_SetTextBGColor(1);
+			gfx_SetColor(1);
+			gfx_FillRectangle_NoClip(115,141,90,62); //8px taller, downward
+			for (i=0,y=136; i<5; ++i,y+=14) {
+				gfx_PrintStringXY(mainmenu[i],128,y);
+			}
+			gfx_SetTextXY(120,148+(14*curopt));
+			gfx_PrintChar(']');
+			if (kd|kc) {
+				if (kd&kb_Up) curopt--;
+				if (kd&kb_Down) curopt++;
+				curopt &= 3;
+				if (kc&kb_2nd) gamestate = mainmenustate[curopt];
+			}
+			gfx_SwapDraw();
+		} else if (gamestate == GM_GAMEMENU) { //Select origina/flash and players
+			break;
+			
+		} else if (gamestate == GM_GAMEOPTIONS) { //Class/height/match,bgm, etc
+			break;
+			
+			
+		} else if (gamestate == GM_GAMEPREVIEW) {  //Preview of selected options b4 starting
+			break;
+			
+		} else if (gamestate == GM_ARCADEOPTIONS) {
+			//Later replace with actual thingies.
+			rungame(&options);
+			debounce = 1;
+			gamestate = GM_TITLE;
+			rebuilding = 2;
+			
+		} else if (gamestate == GM_OPTIONS) {
+			//Options menu for arcade mode / other settings
+			break;
+		} else break;
+	}
 	keywait();
 	gfx_End();
 }
@@ -422,6 +521,13 @@ void initgfx(void) {
 	gfx_Begin();
 	gfx_SetDrawBuffer();
 	ti_CloseAll();
+	
+	baseimg = (void*) gfx_vbuffer;
+	flipimg = (void*) (*gfx_vbuffer+32768+2);
+
+	//Title banner and graphics
+	dzx7_Turbo(banner_compressed,baseimg);
+	titlebanner = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 	//Font data abbreviated
 	gfx_SetFontData(font-(32*8));
 	fontspacing = malloc(128);
@@ -429,9 +535,6 @@ void initgfx(void) {
 	gfx_SetFontSpacing(fontspacing);
 	gfx_SetPalette(tiles_gfx_pal,sizeof tiles_gfx_pal,0);
 	//Palette area at PALSWAP_AREA is initialized on game mode select
-	
-	baseimg = (void*) gfx_vbuffer;
-	flipimg = (void*) (*gfx_vbuffer+32768+2);
 	
 	for (i=0;i<gems_tiles_num;i++) {
 		dzx7_Turbo(gems_tiles_compressed[i],baseimg);
@@ -722,10 +825,7 @@ RESTARTGAME:
 					}
 				}
 			}
-			
-			//Check for matches, update grid for match anim, and update score
-			//Check for level up, and then update drop_max accordingly
-			//
+
 			//If match timed out, check board for matches proceed to place new triad.
 			if (!--(player1.cur_delay)) {
 				//Check if anything is past the top before continuing
