@@ -13,7 +13,7 @@ enum GameState {GM_TITLE=0,GM_MAINMENU,
 				GM_ARCADEOPTIONS, //This is an in-field menu
 				GM_GAMEMENU,GM_GAMEOPTIONS,GM_GAMEPREVIEW,
 				GM_PLAYSTART,GM_PLAYMATCH,GM_PLAYMOVE, GM_GAMEOVER,
-				GM_OPTIONS};
+				GM_OPTIONS,GM_GOTOMAIN};
 enum GameType { TYPE_ARCADE = 0, TYPE_ORIGINAL, TYPE_FLASH };
 enum Players {PLAYER1 = 0, PLAYER2, DOUBLES };
 enum Difficulty { NOVICE = 3, AMATEUR, PRO,
@@ -27,6 +27,12 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define FONT_WHITE 2
 #define FONT_GOLD 3
 #define FONT_CYAN 4
+
+#define BG_TRANSPARENT 0
+#define BG_BLACK 1
+#define BG_WHITE 2
+
+
 //original NOV 50, arcade 35,
 
 #define GRID_W 6
@@ -167,6 +173,8 @@ uint16_t *numpal[] = {
 };
 
 char *mainmenu[] = {" select "," arcade"," menu"," options"," quit"};
+char *gameselmenu1[] = {"original game","flash columns"};
+char *gameselmenu2[] = {"1 player","2 players","doubles"};
 uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
 
 #define BG_CENT 0
@@ -359,7 +367,6 @@ gfx_sprite_t *menuborder;
 gfx_rletsprite_t *p1sprite;
 gfx_rletsprite_t *p2sprite;
 
-
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 uint8_t numbuf[6];
 
@@ -370,9 +377,31 @@ void* setnewtitle() {
 int randI(int imin,int imax) {  //Because apparently randInt is actually a macro.
 	return randInt(imin,imax);
 }
+void drawmenubg(void) {
+	uint8_t i;
+	int x,y;  //Can't cast y as uint8_t due to bounds check at end
+	
+	//Draw top and bottom black borders
+	gfx_SetColor(BG_BLACK);
+	gfx_FillRectangle_NoClip(0,0,320,8);
+	gfx_FillRectangle_NoClip(0,232,320,8);
+	//Draw horizontal image border frames
+	for(y=8;y<232;y+=72) {
+		for(x=0;x<320;x+=8) {
+			gfx_Sprite_NoClip(menuborder,x,y);
+		}
+	}
+	//Draw menu fill tiles/sprites
+	for(y=16;y<232;y+=72) {
+		for(x=0;x<320;x+=80) {
+			gfx_Sprite_NoClip(menutile,x,y);
+		}
+	}
+}
 
 void main(void) {
 	uint8_t i,y,rebuilding,gamestate;
+	int x;
 	kb_key_t kd,kc;
 	options_t options;
 	void *titleptr;
@@ -437,6 +466,7 @@ void main(void) {
 				curopt = 0;
 				//handle keys here including moving on to next.
 			}
+			
 		} else if (gamestate == GM_MAINMENU) { //Menu on the title screen
 			if (kc&kb_Mode) break;
 			gfx_SetTextFGColor(2);
@@ -454,11 +484,56 @@ void main(void) {
 				if (kd&kb_Up) curopt--;
 				if (kd&kb_Down) curopt++;
 				curopt &= 3;
-				if (kc&kb_2nd) gamestate = mainmenustate[curopt];
+				if (kc&kb_2nd) {
+					gamestate = mainmenustate[curopt];
+					curopt = 0;
+				}
 			}
 			gfx_SwapDraw();
+			
 		} else if (gamestate == GM_GAMEMENU) { //Select origina/flash and players
-			break;
+			if (kc&kb_Mode) gamestate = GM_GOTOMAIN;
+			
+			if (kd) {
+				if (kd&kb_Up) {
+					if (curopt<2) curopt+=6;
+					curopt -= 2;
+				}
+				if (kd&kb_Down) {
+					if (curopt>3) curopt-=6;
+					curopt += 2;
+				}
+				if (kd&kb_Left) {
+					if (!(curopt&1)) curopt += 2;
+					curopt--;
+				}
+				if (kd&kb_Right) {
+					if (curopt&1) curopt -= 2;
+					curopt++;
+				}
+			}
+			
+			
+			drawmenubg();
+			gfx_SetTextBGColor(BG_TRANSPARENT);
+			gfx_SetTextFGColor(FONT_GOLD);
+			for (i=0,x=48;i<2;i++,x+=120) {
+				gfx_PrintStringXY(gameselmenu1[i],x,72);
+			}
+			gfx_SetTextFGColor(FONT_WHITE);
+			gfx_PrintStringXY("menu",144,40);
+			for (i=0,y=96;i<6;y+=24) {
+				for(x=48;x<200;i++,x+=120) {
+					if (i==curopt) {
+						gfx_SetTextFGColor(FONT_CYAN);
+						gfx_SetTextXY(x,y);
+						gfx_PrintChar(']');
+						gfx_SetTextFGColor(FONT_WHITE);
+					}
+					gfx_PrintStringXY(gameselmenu2[i>>1],x+16,y);
+				}
+			}
+			gfx_SwapDraw();
 			
 		} else if (gamestate == GM_GAMEOPTIONS) { //Class/height/match,bgm, etc
 			break;
@@ -470,13 +545,16 @@ void main(void) {
 		} else if (gamestate == GM_ARCADEOPTIONS) {
 			//Later replace with actual thingies.
 			rungame(&options);
-			debounce = 1;
-			gamestate = GM_TITLE;
-			rebuilding = 2;
+			gamestate = GM_GOTOMAIN;
 			
 		} else if (gamestate == GM_OPTIONS) {
 			//Options menu for arcade mode / other settings
 			break;
+		} else if (gamestate == GM_GOTOMAIN) {
+			debounce = 1;
+			gamestate = GM_TITLE;
+			rebuilding = 2;
+			gamestate = GM_TITLE;
 		} else break;
 	}
 	keywait();
@@ -526,6 +604,8 @@ void initgfx(void) {
 	gfx_Begin();
 	gfx_SetDrawBuffer();
 	ti_CloseAll();
+	
+	gfx_SetTextTransparentColor(BG_TRANSPARENT);
 	
 	baseimg = (void*) gfx_vbuffer;
 	flipimg = (void*) (*gfx_vbuffer+32768+2);
