@@ -354,6 +354,11 @@ gfx_rletsprite_t *bgspr[16];
 gfx_rletsprite_t *scorenum1[score_tiles_num]; //0-9 and colon.
 gfx_rletsprite_t *scorenum2[score_tiles_num]; //0-9 and colon.
 
+gfx_sprite_t *menutile;
+gfx_sprite_t *menuborder;
+gfx_rletsprite_t *p1sprite;
+gfx_rletsprite_t *p2sprite;
+
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 uint8_t numbuf[6];
@@ -528,6 +533,11 @@ void initgfx(void) {
 	//Title banner and graphics
 	dzx7_Turbo(banner_compressed,baseimg);
 	titlebanner = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+	//Menu graphics
+	dzx7_Turbo(menutile_compressed,menutile = malloc(menutile_size));
+	dzx7_Turbo(menuborder_compressed,menuborder = malloc(menuborder_size));
+	p1sprite = decompAndAllocate(p1_compressed);
+	p2sprite = decompAndAllocate(p2_compressed);
 	//Font data abbreviated
 	gfx_SetFontData(font-(32*8));
 	fontspacing = malloc(128);
@@ -537,12 +547,10 @@ void initgfx(void) {
 	//Palette area at PALSWAP_AREA is initialized on game mode select
 	
 	for (i=0;i<gems_tiles_num;i++) {
-		dzx7_Turbo(gems_tiles_compressed[i],baseimg);
-		gems_spr[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+		gems_spr[i] = decompAndAllocate(gems_tiles_compressed[i]);
 	}
 	for (i=0;i<explosion_tiles_num;i++) {
-		dzx7_Turbo(explosion_tiles_compressed[i],baseimg);
-		explosion_spr[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+		explosion_spr[i] = decompAndAllocate(explosion_tiles_compressed[i]);
 	}
 	dzx7_Turbo(cursor_compressed,baseimg);
 	cursor_spr = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
