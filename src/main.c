@@ -425,9 +425,9 @@ void dispcursor(x,y,yidx,xidx,prevcursor) {
 }
 
 void main(void) {
-	uint8_t i,j,y,rebuilding,gamestate;
+	uint8_t i,j,y,t,oldy,rebuilding,gamestate;
 	uint8_t idxlimit;
-	int x,newx,dx;
+	int x,newx,dx,oldx;
 	kb_key_t kd,kc;
 	options_t arcade_options;
 	options_t game_options;
@@ -760,7 +760,7 @@ void main(void) {
 				gfx_PrintStringXY("height: ",x,y);
 				gfx_SetTextFGColor(FONT_WHITE);
 				gfx_PrintString((levelnums+2)[game_options.p1_level]);
-				y+=16;
+				//y+=16;
 			}
 	
 			if ((!(curopt&1) || curopt ==3) && game_options.time_trial) {
@@ -771,8 +771,52 @@ void main(void) {
 			}
 			y+=24;
 			//1 or 2 player stats
-			
-			
+			if (curopt==2 || curopt==3) {
+				idxlimit = 2;
+				x = 24;
+			} else {
+				idxlimit = 1;
+			}
+			oldy = y;
+			oldx = x;
+			for (i=0;i<idxlimit;i++,x+=152) {
+				y = oldy;
+				if (idxlimit-1) {
+					gfx_SetTextFGColor(FONT_GOLD);
+					gfx_PrintStringXY("player ",x+24,y);
+					gfx_PrintString((levelnums+1)[i]);
+					y += 24;
+					t = (!i)?game_options.p1_class:game_options.p2_class;
+					gfx_PrintStringXY("class : ",x,y);
+					gfx_SetTextFGColor(FONT_WHITE);
+					gfx_PrintString(classes[t]);
+					if (curopt==3) {
+						y += 16;
+						t = (!i)?game_options.p1_level:game_options.p2_level;
+						gfx_SetTextFGColor(FONT_GOLD);
+						gfx_PrintStringXY("height:   ",x,y);
+						gfx_SetTextFGColor(FONT_WHITE);
+						gfx_PrintString((levelnums+2)[t]);
+					}
+					y +=24;
+				}
+				x += (curopt&1)?24:16;
+				//Don't display scoring information if matches up with following
+				if (!(curopt==3 && game_options.time_trial)) {
+					gfx_SetTextFGColor(FONT_GOLD);
+					gfx_PrintStringXY("best ",x,y);
+					if (curopt&1) s = "time";
+					else          s = "score";
+					gfx_PrintString(s);
+					y+=16;
+					//Fetch score/time string and display it.
+					y+=16;
+					gfx_PrintStringXY("by.",x,y);
+					y+=16;
+					//Fetch name field(s) and print them.
+				}
+				x = oldx;
+			}
 			gfx_SwapDraw();
 			
 		} else if (gamestate == GM_ARCADEOPTIONS) {
