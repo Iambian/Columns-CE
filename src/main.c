@@ -179,6 +179,8 @@ char *classes[] = {"novice","amateur","pro"};
 char *levelnums[] = {"0","1","2","3","4","5","6","7","8","9"};
 char *bgms[] = {"clotho","lathesis","atropos"};
 char *noyes[] = {"no","yes"};
+char *previewgame[] = {"original","flash columns"};
+
 uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
 
 #define BG_CENT 0
@@ -412,12 +414,12 @@ void drawmenubg(void) {
 
 //use:          dx,y,i.j,curopt
 void dispcursor(x,y,yidx,xidx,prevcursor) {
-	if (*(gamecursorx1[yidx]) == xidx && !(gamecursory1==yidx && main_timer&2)) {
+	if (*gamecursorx1[yidx] == xidx && !(gamecursory1==yidx && main_timer&2)) {
 		if (yidx<2) gfx_RLETSprite_NoClip(p1sprite,x,y-8);
 		else        gfx_RLETSprite_NoClip(downarrow,x,y-8);
 	}
 	if (prevcursor<2) return;
-	if (*(gamecursorx2[yidx]) == xidx && !(gamecursory2==yidx && main_timer&2)) {
+	if (*gamecursorx2[yidx] == xidx && !(gamecursory2==yidx && main_timer&2)) {
 		gfx_RLETSprite_NoClip(p2sprite,x,y+8);
 	}
 }
@@ -535,8 +537,10 @@ void main(void) {
 				//All original game and only 2 player flash columns mode uses
 				//time_trial flags, tho for flash, it means match play.
 				//Otherwise, it's all about the BGM (which this ver don't got)
-				if (!(curopt&1)) gamecursorx1[2] = &game_options.time_trial;
-				else             gamecursorx1[2] = &game_options.bgm;
+				if (!(curopt&1) || curopt==3) {
+					gamecursorx1[2] = &game_options.time_trial;
+				} else gamecursorx1[2] = &game_options.bgm;
+				
 				//Final option is BGM, except in flash 1p/dbls where it's blank.
 				if (curopt==1 || curopt==5) gamecursorx1[3] = NULL;
 				else                        gamecursorx1[3] = &game_options.bgm;
@@ -586,10 +590,54 @@ void main(void) {
 			
 		} else if (gamestate == GM_GAMEOPTIONS) { //Class/height/match,bgm, etc
 			if (kc&kb_Mode) gamestate = GM_GAMEMENU;
+			if (kc&kb_2nd) gamestate = GM_GAMEPREVIEW;
 			if (kd) {
-				//Handle left/right/up/down key inputs here.
-				
-				
+				//Handle up/down
+				idxlimit = (curopt!=1 && curopt!=5)?3:2;
+				if (kd&kb_Down) {
+					if (gamecursory1<idxlimit) {
+						gamecursory1++;
+					} else gamecursory1 = 0;
+				}
+				if (kd&kb_Up) {
+					if (gamecursory1) gamecursory1--;
+					else gamecursory1 = idxlimit;
+				}
+				//Handle left/right
+				switch (gamecursory1) {
+					case 0:
+						idxlimit = 2;
+						break;
+					case 1:
+						if (curopt&1) idxlimit = 7;
+						else idxlimit = 9;
+						break;
+					case 2:
+						if (curopt==1 || curopt==5) idxlimit = 2;
+						else idxlimit = 1;
+						break;
+					case 3:
+						if (curopt==1 || curopt==5) idxlimit = 0;
+						else idxlimit = 2;
+						break;
+					default:
+						idxlimit = 0;
+						break;
+				}
+				if (kd&kb_Left) {
+					if (*gamecursorx1[gamecursory1]) {
+						--*gamecursorx1[gamecursory1];
+					} else {
+						*gamecursorx1[gamecursory1] = idxlimit;
+					}
+				}
+				if (kd&kb_Right) {
+					if (*gamecursorx1[gamecursory1]<idxlimit) {
+						++*gamecursorx1[gamecursory1];
+					} else {
+						*gamecursorx1[gamecursory1] = 0;
+					}
+				}
 			}
 			drawmenubg();
 			//Draw menu text here.
@@ -676,7 +724,24 @@ void main(void) {
 			gfx_SwapDraw();
 			
 		} else if (gamestate == GM_GAMEPREVIEW) {  //Preview of selected options b4 starting
-			break;
+			if (kc&kb_Mode) gamestate = GM_GAMEOPTIONS;
+			if (kc&kb_2nd) {
+				continue; //DEBUG: DON'T DO ANY OF THIS STUFF YET.
+				//convert classes to values used in game mode.
+				game_options.p1_class += NOVICE;
+				game_options.p2_class += NOVICE;
+				//Start the game...
+				initgamestate(&game_options);
+				rungame(&game_options);
+			}
+			drawmenubg();
+			//Draw menu text
+			gfx_SetTextFGColor(FONT_GOLD);
+			gfx_PrintStringXY("game  : ",x=96,y=40);
+			gfx_SetTextFGColor(FONT_WHITE);
+			gfx_PrintStringXY(previewgame[curopt&1],x,y+=16);
+			
+			gfx_SwapDraw();
 			
 		} else if (gamestate == GM_ARCADEOPTIONS) {
 			//Later replace with actual thingies.
