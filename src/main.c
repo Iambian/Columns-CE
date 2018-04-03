@@ -418,7 +418,7 @@ void dispcursor(x,y,yidx,xidx,prevcursor) {
 		if (yidx<2) gfx_RLETSprite_NoClip(p1sprite,x,y-8);
 		else        gfx_RLETSprite_NoClip(downarrow,x,y-8);
 	}
-	if (prevcursor<2) return;
+	if (prevcursor!=2 && prevcursor !=3) return;
 	if (*gamecursorx2[yidx] == xidx && !(gamecursory2==yidx && main_timer&2)) {
 		gfx_RLETSprite_NoClip(p2sprite,x,y+8);
 	}
@@ -528,6 +528,8 @@ void main(void) {
 				memset(&game_options,0,sizeof game_options);
 				//Write game type
 				game_options.type = (curopt&1) ? TYPE_FLASH : TYPE_ORIGINAL;
+				//Write number of players
+				game_options.players = (curopt>1) ? PLAYER2 : PLAYER1;
 				//Game class is the same across all modes of play
 				gamecursorx1[0] = (uint8_t*) &game_options.p1_class;
 				gamecursorx2[0] = (uint8_t*) &game_options.p2_class;
@@ -590,7 +592,13 @@ void main(void) {
 			
 		} else if (gamestate == GM_GAMEOPTIONS) { //Class/height/match,bgm, etc
 			if (kc&kb_Mode) gamestate = GM_GAMEMENU;
-			if (kc&kb_2nd) gamestate = GM_GAMEPREVIEW;
+			if (kc&kb_2nd) {
+				//There really is no need to convert values. All values
+				//are mirrored from the actual game_options struct
+				//via pointer shenaningans.
+				gamestate = GM_GAMEPREVIEW;
+			}
+			
 			if (kd) {
 				//Handle up/down
 				idxlimit = (curopt!=1 && curopt!=5)?3:2;
@@ -727,9 +735,8 @@ void main(void) {
 			if (kc&kb_Mode) gamestate = GM_GAMEOPTIONS;
 			if (kc&kb_2nd) {
 				continue; //DEBUG: DON'T DO ANY OF THIS STUFF YET.
-				//convert classes to values used in game mode.
-				game_options.p1_class += NOVICE;
-				game_options.p2_class += NOVICE;
+				game_options.p1_class += NOVICE;  //convert.
+				game_options.p2_class += NOVICE;  //convert.
 				//Start the game...
 				initgamestate(&game_options);
 				rungame(&game_options);
@@ -739,7 +746,32 @@ void main(void) {
 			gfx_SetTextFGColor(FONT_GOLD);
 			gfx_PrintStringXY("game  : ",x=96,y=40);
 			gfx_SetTextFGColor(FONT_WHITE);
-			gfx_PrintStringXY(previewgame[curopt&1],x,y+=16);
+			gfx_PrintString(previewgame[game_options.type==TYPE_FLASH]);
+			y+=16;
+			if (curopt!=2 && curopt!=3) {
+				gfx_SetTextFGColor(FONT_GOLD);
+				gfx_PrintStringXY("class : ",x,y);
+				gfx_SetTextFGColor(FONT_WHITE);
+				gfx_PrintString(classes[game_options.p1_class]);
+				y+=16;
+			}
+			if (curopt==1 || curopt == 5) {
+				gfx_SetTextFGColor(FONT_GOLD);
+				gfx_PrintStringXY("height: ",x,y);
+				gfx_SetTextFGColor(FONT_WHITE);
+				gfx_PrintString((levelnums+2)[game_options.p1_level]);
+				y+=16;
+			}
+	
+			if ((!(curopt&1) || curopt ==3) && game_options.time_trial) {
+				gfx_SetTextFGColor(FONT_CYAN);
+				if (!(curopt&1)) s = "time trial mode";
+				else             s = "match play mode";
+				gfx_PrintStringXY(s,x,y);
+			}
+			y+=24;
+			//1 or 2 player stats
+			
 			
 			gfx_SwapDraw();
 			
