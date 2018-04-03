@@ -175,6 +175,10 @@ uint16_t *numpal[] = {
 char *mainmenu[] = {" select "," arcade"," menu"," options"," quit"};
 char *gameselmenu1[] = {"original game","flash columns"};
 char *gameselmenu2[] = {"1 player","2 players","doubles"};
+char *classes[] = {"novice","amateur","pro"};
+char *levelnums[] = {"0","1","2","3","4","5","6","7","8","9"};
+char *bgms[] = {"clotho","lathesis","atropos"};
+char *noyes[] = {"no","yes"};
 uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
 
 #define BG_CENT 0
@@ -366,9 +370,16 @@ gfx_sprite_t *menutile;
 gfx_sprite_t *menuborder;
 gfx_rletsprite_t *p1sprite;
 gfx_rletsprite_t *p2sprite;
+gfx_rletsprite_t *downarrow;
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 uint8_t numbuf[6];
+uint8_t gamecursory1;    //Up/down changes these and indexes to gamecursorx.
+uint8_t gamecursory2;    //Controlled remotely by other calculator.
+//Points to the options dialog entity each Y position indexes.
+//You must explicitly typecast each use as they may differ depending on options.
+uint8_t *gamecursorx1[4];
+uint8_t *gamecursorx2[4];
 
 void* setnewtitle() {
 	if (randInt(0,1)) return title1_compressed;
@@ -399,14 +410,30 @@ void drawmenubg(void) {
 	}
 }
 
+//use:          dx,y,i.j,curopt
+void dispcursor(x,y,yidx,xidx,prevcursor) {
+	if (*(gamecursorx1[yidx]) == xidx && !(gamecursory1==yidx && main_timer&3)) {
+		if (yidx<2) gfx_RLETSprite_NoClip(p1sprite,x,y-8);
+		else        gfx_RLETSprite_NoClip(downarrow,x,y-8);
+	}
+	if (prevcursor<2) return;
+	if (*(gamecursorx2[yidx]) == xidx && !(gamecursory2==yidx && main_timer&3)) {
+		gfx_RLETSprite_NoClip(p2sprite,x,y+8);
+	}
+}
+
 void main(void) {
-	uint8_t i,y,rebuilding,gamestate;
-	int x;
+	uint8_t i,j,y,rebuilding,gamestate;
+	uint8_t idxlimit;
+	int x,newx,dx;
 	kb_key_t kd,kc;
-	options_t options;
+	options_t arcade_options;
+	options_t game_options;
 	void *titleptr;
 	uint8_t curopt,maxopt;
 	uint8_t debounce;
+	char *s;
+	char **ss;
 	
 	//Randomize the RNG
 	asm("	LD A,R");  //Grab semirandom value from register R
@@ -427,25 +454,25 @@ void main(void) {
 	gfx_FillScreen(0x01);
 	
 	/* Initialize game variables */
+	memset(&arcade_options,0,sizeof arcade_options);
+	//TODO: LOAD ARCADE OPTIONS FROM FILE IF POSSIBLE, ELSE INIT LIKE SO:
+	arcade_options.type = TYPE_ARCADE;
+	arcade_options.players = PLAYER1;
+	arcade_options.p1_class = NORMAL;
+	arcade_options.p2_class = NORMAL;
+	arcade_options.time_trial = false;
+	arcade_options.p1_level = 0;
+	arcade_options.p2_level = 0;
+	arcade_options.bgm = 0;
+	//game_options initialized when selected from GM_GAMEMENU
 	titleptr = setnewtitle();
 	rebuilding = 2;
 	gamestate = 0;
 	debounce = 0;
 	curopt = 0;
 	maxopt = 0;
-	
-	options.type = TYPE_ORIGINAL;
-	options.players = PLAYER1;
-	options.p1_class = NOVICE;
-	options.p2_class = EASY;
-	options.time_trial = false;
-	options.p1_level = 0;
-	options.p2_level = 0;
-	options.bgm = 0;
-	
-	initgamestate(&options);
-	
 	while (1) {
+		main_timer++;
 		kb_Scan();
 		kc = kb_Data[1];
 		kd = kb_Data[7];
@@ -493,6 +520,30 @@ void main(void) {
 			
 		} else if (gamestate == GM_GAMEMENU) { //Select origina/flash and players
 			if (kc&kb_Mode) gamestate = GM_GOTOMAIN;
+			if (kc&kb_2nd) {
+				memset(gamecursorx1,0,sizeof gamecursorx1);
+				memset(gamecursorx2,0,sizeof gamecursorx2);
+				memset(&game_options,0,sizeof game_options);
+				//Write game type
+				game_options.type = (curopt&1) ? TYPE_FLASH : TYPE_ORIGINAL;
+				//Game class is the same across all modes of play
+				gamecursorx1[0] = (uint8_t*) &game_options.p1_class;
+				gamecursorx2[0] = (uint8_t*) &game_options.p2_class;
+				//Game level uses the same indices. Is translated on game init
+				gamecursorx1[1] = &game_options.p1_level;
+				gamecursorx2[1] = &game_options.p2_level;
+				//All original game and only 2 player flash columns mode uses
+				//time_trial flags, tho for flash, it means match play.
+				//Otherwise, it's all about the BGM (which this ver don't got)
+				if (!(curopt&1)) gamecursorx1[2] = &game_options.time_trial;
+				else             gamecursorx1[2] = &game_options.bgm;
+				//Final option is BGM, except in flash 1p/dbls where it's blank.
+				if (curopt==1 || curopt==5) gamecursorx1[3] = NULL;
+				else                        gamecursorx1[3] = &game_options.bgm;
+				//if (curopt>1) continue; /*disallow 2player modes*/
+				gamecursory2 = gamecursory1 = 0;
+				gamestate = GM_GAMEOPTIONS;
+			}
 			
 			if (kd) {
 				if (kd&kb_Up) {
@@ -512,8 +563,6 @@ void main(void) {
 					curopt++;
 				}
 			}
-			
-			
 			drawmenubg();
 			gfx_SetTextBGColor(BG_TRANSPARENT);
 			gfx_SetTextFGColor(FONT_GOLD);
@@ -536,15 +585,103 @@ void main(void) {
 			gfx_SwapDraw();
 			
 		} else if (gamestate == GM_GAMEOPTIONS) { //Class/height/match,bgm, etc
-			break;
-			
+			if (kc&kb_Mode) gamestate = GM_GAMEMENU;
+			if (kd) {
+				//Handle left/right/up/down key inputs here.
+				
+				
+			}
+			drawmenubg();
+			//Draw menu text here.
+			for (x=40,y=32,i=0;i<((curopt==1||curopt==5)?3:4);i++) {
+				switch (i) {
+					case 0:
+						s = "class";
+						break;
+					case 1:
+						if (curopt&1) s = "height";
+						else          s = "level";
+						break;
+					case 2:
+						if (curopt==1 || curopt == 5) s = "bgm";
+						else if (curopt&1) s = "match";
+						else s = "time trial";
+						break;
+					case 3:
+						if (!(curopt == 1 || curopt == 5)) s = "bgm";
+						else s = "";
+						break;
+					default:
+						s = "";
+						break;
+				}
+				gfx_SetTextFGColor(FONT_GOLD);
+				gfx_PrintStringXY(s,x,y);
+				newx = x+24;
+				y += 24;
+				switch (i) {
+					case 0:
+						ss = classes;
+						idxlimit = 3;
+						dx = 72;
+						break;
+					case 1:
+						if (curopt&1) {
+							ss = levelnums+2;
+							idxlimit = 8;
+						} else {
+							ss = levelnums;
+							idxlimit = 10;
+						}
+						dx = 16;
+						break;
+					case 2:
+						if ( curopt == 1 || curopt == 5) {
+							ss = bgms;
+							idxlimit = 3;
+							dx = 80;
+						} else {
+							ss = noyes;
+							idxlimit = 2;
+							dx = 40;
+						}
+						break;
+					case 3:
+						if ( curopt == 1 || curopt == 5) {
+							ss = NULL;
+							idxlimit = 0;
+							dx = 0;
+						} else {
+							ss = bgms;
+							idxlimit = 3;
+							dx = 80;
+						}
+						break;
+					default:
+						ss = NULL;
+						idxlimit = 0;
+						dx = 0;
+						break;
+				}
+				
+				gfx_SetTextFGColor(FONT_WHITE);
+				if (ss) {
+					for (j=0;j<idxlimit;j++,newx+=dx) {
+						gfx_PrintStringXY(ss[j],newx,y);
+						dispcursor(newx,y,i,j,curopt);
+					}
+				}
+				y += 24;
+			}
+			gfx_SwapDraw();
 			
 		} else if (gamestate == GM_GAMEPREVIEW) {  //Preview of selected options b4 starting
 			break;
 			
 		} else if (gamestate == GM_ARCADEOPTIONS) {
 			//Later replace with actual thingies.
-			rungame(&options);
+			initgamestate(&arcade_options);
+			rungame(&arcade_options);
 			gamestate = GM_GOTOMAIN;
 			
 		} else if (gamestate == GM_OPTIONS) {
@@ -554,7 +691,7 @@ void main(void) {
 			debounce = 1;
 			gamestate = GM_TITLE;
 			rebuilding = 2;
-			gamestate = GM_TITLE;
+			titleptr = setnewtitle();
 		} else break;
 	}
 	keywait();
@@ -618,6 +755,7 @@ void initgfx(void) {
 	dzx7_Turbo(menuborder_compressed,menuborder = malloc(menuborder_size));
 	p1sprite = decompAndAllocate(p1_compressed);
 	p2sprite = decompAndAllocate(p2_compressed);
+	downarrow = decompAndAllocate(downarrow_compressed);
 	//Font data abbreviated
 	gfx_SetFontData(font-(32*8));
 	fontspacing = malloc(128);
