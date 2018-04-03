@@ -412,12 +412,12 @@ void drawmenubg(void) {
 
 //use:          dx,y,i.j,curopt
 void dispcursor(x,y,yidx,xidx,prevcursor) {
-	if (*(gamecursorx1[yidx]) == xidx && !(gamecursory1==yidx && main_timer&3)) {
+	if (*(gamecursorx1[yidx]) == xidx && !(gamecursory1==yidx && main_timer&2)) {
 		if (yidx<2) gfx_RLETSprite_NoClip(p1sprite,x,y-8);
 		else        gfx_RLETSprite_NoClip(downarrow,x,y-8);
 	}
 	if (prevcursor<2) return;
-	if (*(gamecursorx2[yidx]) == xidx && !(gamecursory2==yidx && main_timer&3)) {
+	if (*(gamecursorx2[yidx]) == xidx && !(gamecursory2==yidx && main_timer&2)) {
 		gfx_RLETSprite_NoClip(p2sprite,x,y+8);
 	}
 }
