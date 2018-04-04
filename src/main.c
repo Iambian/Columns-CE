@@ -148,7 +148,23 @@ typedef struct options_t {
 	uint8_t p2_level;
 	uint8_t bgm;
 } options_t;
-	
+typedef struct score_t {
+	char name[4];     //3 character name, zero-terminated
+	char digits[10];  //8 digit score or 5 digit time, zero terminated.
+} score_t;
+typedef struct dblscore_t {
+	char name[4];     //3 character name, zero-terminated
+	char name2[4];    //[IF USED] 3 ch name, zero-terminated.
+	char digits[10];  //8 digit score or 5 digit time, zero terminated.
+} dblscore_t;
+struct save {
+	score_t score1ps[3];    //orig 1p, orig 1p TT, flash 1p. 2p local == 1p.
+	dblscore_t score1pd[3]; //orig db, orig db TT, flash db. best always local.
+	options_t arcopt;
+	options_t gameopt;
+}
+
+
 uint16_t bgp1[] = {528,396,264,4228,404,272,140,8};                  //1PO: cyan/blue
 uint16_t bgp2[] = {20876,16648,12420,8192,21008,16780,12552,8324};   //2PO: pink/lpink
 uint16_t bgp3[] = {25088,20864,16640,12416,21012,16784,12556,8328};  //DBO: gold/lav
