@@ -157,14 +157,22 @@ typedef struct score_t {
 
 typedef struct dblscore_t {
 	char name[4];     //3 character name, zero-terminated
-	char name2[4];    //[IF USED] 3 ch name, zero-terminated.
 	char digits[10];  //8 digit score or 5 digit time, zero terminated.
+	char name2[4];    //[IF USED] 3 ch name, zero-terminated.
 } dblscore_t;
+
+typedef struct arcscore_t {
+	char name[4];     //3 ch name, 0-term
+	char digits[10];  //8 ch score, 0-term
+	char jewels[5];   //4 ch jewels (max 9999), 0-term
+	char level[4];    //3 ch levels (theoretical max 285), 0-term
+} arcscore_t;
 
 struct {
 	uint8_t version;
 	score_t score1ps[3];    //orig 1p, orig 1p TT, flash 1p. 2p local == 1p.
 	dblscore_t score1pd[3]; //orig db, orig db TT, flash db. best always local.
+	arcscore_t score1pa[9]; //9 scores, sorted by highest score.
 	options_t arcopt;
 	options_t gameopt;
 } save;
@@ -449,12 +457,21 @@ void dispcursor(x,y,yidx,xidx,prevcursor) {
 	}
 }
 
+void* getscoreptr(options_t *options) {
+	uint8_t idx;
+	if (options->type == TYPE_ARCADE) return &save.score1pa;
+	idx = 0;
+	if (options->time_trial) idx = 1;
+	if (options->type == TYPE_FLASH) idx = 2;
+	return (options->players == DOUBLES) ? &save.score1pd[idx] : &save.score1pd[idx];
+}
+//******************************************************************************
 void main(void) {
 	uint8_t i,j,y,t,oldy,rebuilding,gamestate;
 	uint8_t idxlimit;
-	int x,newx,dx,oldx;
+	int x,newx,dx,oldx,tx;
 	kb_key_t kd,kc;
-	options_t arcade_options;
+	options_t *arcade_options;
 	options_t game_options;
 	void *titleptr;
 	uint8_t curopt,maxopt;
@@ -482,10 +499,12 @@ void main(void) {
 	gfx_FillScreen(0x01);
 	
 	/* Initialize game variables */
-	memset(&arcade_options,0,sizeof arcade_options);
-	memset(&save,' ',sizeof save);
-	memset(&save.arcopt,0,sizeof save.arcopt);
-	memset(&save.gameopt,0,sizeof save.gameopt);
+	arcade_options = &save.arcopt;
+	memset(&save,0,sizeof save);
+	save.arcopt.type = TYPE_ARCADE;
+	save.arcopt.players = PLAYER1;
+	save.arcopt.p1_class = NORMAL;
+	save.arcopt.p2_class = NORMAL;
 	save.version = SAVE_VERSION;
 	if ((slot = ti_Open(filename,"r")) != NULL) {
 		if (ti_GetC(slot)==SAVE_VERSION) {
@@ -498,15 +517,7 @@ void main(void) {
 	}
 	ti_CloseAll();
 	
-	//TODO: LOAD ARCADE OPTIONS FROM FILE IF POSSIBLE, ELSE INIT LIKE SO:
-	arcade_options.type = TYPE_ARCADE;
-	arcade_options.players = PLAYER1;
-	arcade_options.p1_class = NORMAL;
-	arcade_options.p2_class = NORMAL;
-	arcade_options.time_trial = false;
-	arcade_options.p1_level = 0;
-	arcade_options.p2_level = 0;
-	arcade_options.bgm = 0;
+	
 	//game_options initialized when selected from GM_GAMEMENU
 	titleptr = setnewtitle();
 	rebuilding = 2;
@@ -570,7 +581,7 @@ void main(void) {
 				//Write game type
 				game_options.type = (curopt&1) ? TYPE_FLASH : TYPE_ORIGINAL;
 				//Write number of players
-				game_options.players = (curopt>1) ? PLAYER2 : PLAYER1;
+				game_options.players = (enum Players) curopt>>1;
 				//Game class is the same across all modes of play
 				gamecursorx1[0] = (uint8_t*) &game_options.p1_class;
 				gamecursorx2[0] = (uint8_t*) &game_options.p2_class;
@@ -844,17 +855,30 @@ void main(void) {
 				x += (curopt&1)?24:16;
 				//Don't display scoring information if matches up with following
 				if (!(curopt==3 && game_options.time_trial)) {
+					
 					gfx_SetTextFGColor(FONT_GOLD);
 					gfx_PrintStringXY("best ",x,y);
 					if (curopt&1) s = "time";
 					else          s = "score";
 					gfx_PrintString(s);
 					y+=16;
-					//Fetch score/time string and display it.
+					s = (char*) getscoreptr(&game_options);
+					if (game_options.players == DOUBLES) {
+						tx = x+16;
+					} else {
+						tx = x;
+					}
+					gfx_PrintStringXY(s+4,tx,y);
 					y+=16;
 					gfx_PrintStringXY("by.",x,y);
 					y+=16;
-					//Fetch name field(s) and print them.
+					if (game_options.players == DOUBLES) {
+						gfx_PrintStringXY(s+0,x,y);
+						gfx_PrintStringXY(" & ",x+32,y);
+						gfx_PrintString(s+4+10);
+					} else {
+						gfx_PrintStringXY(s+0,x+32,y);
+					}
 				}
 				x = oldx;
 			}
@@ -862,8 +886,8 @@ void main(void) {
 			
 		} else if (gamestate == GM_ARCADEOPTIONS) {
 			//Later replace with actual thingies.
-			initgamestate(&arcade_options);
-			rungame(&arcade_options);
+			initgamestate(arcade_options);
+			rungame(arcade_options);
 			gamestate = GM_GOTOMAIN;
 			
 		} else if (gamestate == GM_OPTIONS) {
