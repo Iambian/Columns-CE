@@ -1628,19 +1628,43 @@ void redrawboard(options_t *options) {
 //This problem affects TILE_TARGET_GEM in Flash Columns mode if the target is
 //not on the bottom row. We should also implement half drop support eventually.
 void falldown(entity_t *e) {
-	uint8_t i;
+	uint8_t i,ip;
 	i = e->triad_idx+GRID_BELOW;
 //	dbg_sprintf(dbgout,"Cond1 %i, Cond2 %i\n",i<GRID_SIZE,e->grid[i]==GRID_EMPTY);
 	if (i<GRID_SIZE && e->grid[i]==GRID_EMPTY) {
-		e->triad_idx += GRID_W;
+		//Only move down if tile already halfway in down position
+		if (e->cgrid[e->triad_idx]&TILE_HALFLINGS) e->triad_idx += GRID_W;
 	}
 	//dbg_sprintf(dbgout,"Falldown new idx %i\n",e->triad_idx);
-	for (i=GRID_SIZE-1;i>GRID_W-1;--i) {
-		if (e->grid[i] == GRID_EMPTY && e->grid[i-GRID_W] != GRID_EMPTY) {
-			e->grid[i] = e->grid[i-GRID_W];
-			e->grid[i-GRID_W] = GRID_EMPTY;
-			e->cgrid[i] |= CHANGE_BUF1|CHANGE_BUF2;
-			e->cgrid[i-GRID_W] |= CHANGE_BUF1|CHANGE_BUF2;
+	for (i=GRID_SIZE-1,ip=GRID_SIZE-GRID_W-1;i>GRID_W-1;--i,--ip) {
+		if (e->grid[i]==GRID_EMPTY) {
+			//If destination is empty, move towards it.
+			if (e->cgrid[ip]&TILE_HALFLINGS) {
+				e->grid[i]   = e->grid[ip];
+				e->grid[ip]  = GRID_EMPTY;
+			} else {
+				e->cgrid[ip] |= TILE_HALFLINGS;
+			}
+			e->cgrid[i]  |= CHANGE_BUF1|CHANGE_BUF2;
+			e->cgrid[ip] |= CHANGE_BUF1|CHANGE_BUF2;
+		} else if (e->cgrid[i]&TILE_HALFLINGS) {
+			//If destination is becoming vacated, only allow tiles not moving
+			//yet to begin movement by adding TILE_HALFLINGS. Else illegals.
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
 		}
 	}
 }
