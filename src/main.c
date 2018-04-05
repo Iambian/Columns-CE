@@ -188,8 +188,10 @@ uint16_t bgp5[] = {16652,12424,8196,4096,16784,12556,8328,4100};     //2PF: purp
 uint16_t bgp6[] = {29312,25088,20864,16512,29056,24832,20608,16512}; //DBF: yell/orng
 uint16_t bgp7[] = {20872,16644,12416,8192,21004,16776,12548,8320};   //Aracde mode
 
-uint16_t *blockpal[] = {
-	bgp1,bgp2,bgp3,bgp4,bgp5,bgp6,bgp7
+//blockpal[options->type == TYPE_FLASH][options->players]
+uint16_t *blockpal[2][3] = {
+	{bgp1,bgp2,bgp3},
+	{bgp4,bgp5,bgp6}
 };
 
 uint16_t num0[] = {12300,29725,30365,30621}; //Combo x1 (initial)
@@ -1027,8 +1029,9 @@ void initgfx(void) {
 }
 
 	
-void initgamestate(options_t *options) {
-	uint8_t t,x1,x2,dropmax;
+void initgamestate(options_t *opt) {
+	uint8_t t,tt,x1,x2,dropmax;
+	uint8_t i,j,i1,i2,idx;
 	//Clear entity memory
 	memset(&player1,0,sizeof player1);
 	memset(&player2,0,sizeof player2);
@@ -1038,33 +1041,47 @@ void initgamestate(options_t *options) {
 	//Set grid top position
 	player1.grid_top = player2.grid_top = 16;
 	//Set grid left position
-	if (options->players == PLAYER2){
-		x1 = P1_GRIDLEFT;
-		x2 = P2_GRIDLEFT;
+	if (opt->type == TYPE_ARCADE || opt->players == PLAYER2) {
+		player1.grid_left = P1_GRIDLEFT;
+		player2.grid_left = P2_GRIDLEFT;
+	} else {
+		player2.grid_left = player1.grid_left = CENTER_GRIDLEFT;
 	}
-	else {
-		x2 = x1 = CENTER_GRIDLEFT;
-	}
-	player1.grid_left = x1;
-	player2.grid_left = x2;
 	//Set game state
 	player1.state = player2.state = GM_PLAYMATCH;  //guarantees triad placement
 	//Set maximum gem types
-	if (options->type == TYPE_ARCADE) {
+	if (opt->type == TYPE_ARCADE) {
 		player1.max_types = 5;
 		player2.max_types = 5;
 	} else {
-		player1.max_types = (uint8_t) options->p1_class;
-		player2.max_types = (uint8_t) options->p2_class;
+		player1.max_types = (uint8_t) opt->p1_class;
+		player2.max_types = (uint8_t) opt->p2_class;
 	}
 	//Preselect game level
-	if (options->type == TYPE_FLASH) {
-		player1.drop_max = fallspeed[options->p1_level];
-		player2.drop_max = fallspeed[options->p2_level];
-		//Pregen board based on level
-	} else {
-		player1.level = options->p1_level;
-		player2.level = options->p2_level;
+	player2.drop_max = player1.drop_max = LONG_TIMEOUT;
+	if (opt->type == TYPE_FLASH) {
+		idx = GRID_SIZE-1;
+		i1 = 2+opt->p1_level;
+		i2 = 2+opt->p2_level;
+		for(i=0;i<9;i++) {
+			for (j=0;j<6;j++,idx--) {
+				t = randInt(0,5);
+				if (i<i1) {
+					if (t > opt->p1_level) {
+						tt = t-2;
+					} else tt = t;
+					player1.grid[idx] = t+GRID_GEM1;
+				}
+				if (i<i2) {
+					if (t > opt->p2_level) {
+						tt = t-2;
+					} else tt = t;
+					player2.grid[idx] = t+GRID_GEM1;
+				}
+			}
+		}
+		player1.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
+		player2.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
 		player1.drop_max = player2.drop_max = LONG_TIMEOUT;
 	}
 	//Set up dgrid to force initial render
@@ -1094,7 +1111,7 @@ void drawSpriteAndClass(enum Difficulty diff, gfx_rletsprite_t *sprite, int x, i
 }
 
 
-void drawbgspriteobj(uint8_t isflash, uint8_t idx, uint8_t *ptr) {
+void drawbgspriteobj(options_t *opt, uint8_t idx, uint8_t *ptr) {
 	uint8_t x,y,id;
 	char *s;
 	x = ptr[0];
@@ -1104,13 +1121,15 @@ void drawbgspriteobj(uint8_t isflash, uint8_t idx, uint8_t *ptr) {
 	s = NULL;
 	if (id==BG_CENT){
 		if (idx == SOBJ_SCOREMAIN) {
-			if (isflash) s = "best";
-			else         s = "score";
+			if (opt->type == TYPE_FLASH) {
+				if (opt->time_trial) s = "match";
+				else                 s = "best";
+			}	else                 s = "score";
 		} else if (idx == SOBJ_LEVELMAIN) {
 			s = "level";
 		} else if (idx == SOBJ_JEWELSMAIN) {
-			if (isflash) s = "class";
-			else         s = "jewels";
+			if (opt->type == TYPE_FLASH) s = "class";
+			else                         s = "jewels";
 		}
 		if (s!=NULL) {
 			gfx_PrintStringXY(s,x+((52-gfx_GetStringWidth(s))>>1),y+5);
@@ -1142,9 +1161,9 @@ void drawgamebg(options_t *options) {
 	mode = options->type == TYPE_FLASH; //1 for flash, 0 for anything else.
 	panes = ((options->players == PLAYER2) || (options->type == TYPE_ARCADE));
 	for (i=0;i<8;i++) {
-		drawbgspriteobj(mode, i, &(posarr[mode][panes][0][i][0]));
+		drawbgspriteobj(options, i, &(posarr[mode][panes][0][i][0]));
 		if (options->players == DOUBLES || panes) 
-			drawbgspriteobj(mode, i, &(posarr[mode][panes][1][i][0]));
+			drawbgspriteobj(options, i, &(posarr[mode][panes][1][i][0]));
 	}
 }
 
@@ -1170,9 +1189,9 @@ RESTARTGAME:
 	//Generate game static background
 	
 	if (options->type == TYPE_ARCADE) {
-		palptr = blockpal[6];
+		palptr = bgp7;
 	} else {
-		palptr = blockpal[(options->type-1)*2+options->players];
+		palptr = blockpal[options->type == TYPE_FLASH][options->players];
 	}
 	gfx_SetPalette(palptr,16,PALSWAP_AREA);
 	
@@ -1294,14 +1313,14 @@ RESTARTGAME:
 					//Load digits to buffer.
 					y = 111;  //constant in all cases except 1P:2P
 					if (player1.playerid == PLAYER1) {
-						if (options->players == PLAYER2) {
+						if (options->players == PLAYER2 || options->type == TYPE_ARCADE) {
 							y = 87;
 							x = 120;  //player 1 in 2P split screen mode
 						} else {
 							x = 64;   //Player 1 in 1P or doubles single column
 						}
 					} else {
-						if (options->players == PLAYER2) {
+						if (options->players == PLAYER2 || options->type == TYPE_ARCADE) {
 							x = 160;
 						} else {
 							x = 216;
@@ -1482,7 +1501,8 @@ void drawscore(entity_t *e, options_t *opt) {
 	if (e->scorefallthrough) {
 		e->scorefallthrough--;
 		y = 111;
-		if (e->playerid == PLAYER1 && opt->players == PLAYER2) y = 87;
+		if (e->playerid == PLAYER1 && 
+			(opt->players == PLAYER2 || opt->type == TYPE_ARCADE)) y = 87;
 
 		x1 = (e->nums[0]).xpos;
 		x2 = ((e->nums[4]).xpos)+8;
@@ -1594,7 +1614,7 @@ void redrawboard(options_t *options) {
 	
 	drawgrid(&player1,mask_buf);
 	drawscore(&player1,options);
-	if (options->players != PLAYER1) { 
+	if (options->players == PLAYER2 || options->type == TYPE_ARCADE) { 
 		drawgrid(&player2,mask_buf);
 		drawscore(&player2,options);
 	}
