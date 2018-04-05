@@ -8,6 +8,7 @@
 */
 
 #define VERSION_INFO 0.1
+#define SAVE_VERSION 1
 
 enum GameState {GM_TITLE=0,GM_MAINMENU,
 				GM_ARCADEOPTIONS, //This is an in-field menu
@@ -148,21 +149,27 @@ typedef struct options_t {
 	uint8_t p2_level;
 	uint8_t bgm;
 } options_t;
+
 typedef struct score_t {
 	char name[4];     //3 character name, zero-terminated
 	char digits[10];  //8 digit score or 5 digit time, zero terminated.
 } score_t;
+
 typedef struct dblscore_t {
 	char name[4];     //3 character name, zero-terminated
 	char name2[4];    //[IF USED] 3 ch name, zero-terminated.
 	char digits[10];  //8 digit score or 5 digit time, zero terminated.
 } dblscore_t;
-struct save {
+
+struct {
+	uint8_t version;
 	score_t score1ps[3];    //orig 1p, orig 1p TT, flash 1p. 2p local == 1p.
 	dblscore_t score1pd[3]; //orig db, orig db TT, flash db. best always local.
 	options_t arcopt;
 	options_t gameopt;
-}
+} save;
+
+score_t tempscore;
 
 
 uint16_t bgp1[] = {528,396,264,4228,404,272,140,8};                  //1PO: cyan/blue
@@ -198,6 +205,8 @@ char *noyes[] = {"no","yes"};
 char *previewgame[] = {"original","flash columns"};
 
 uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
+
+char *filename = "ColumDAT";
 
 #define BG_CENT 0
 #define BG_NEXT 1
@@ -452,6 +461,7 @@ void main(void) {
 	uint8_t debounce;
 	char *s;
 	char **ss;
+	ti_var_t slot;
 	
 	//Randomize the RNG
 	asm("	LD A,R");  //Grab semirandom value from register R
@@ -462,8 +472,8 @@ void main(void) {
 	asm("		PUSH BC");
 	asm("		LD BC,0");
 	asm("		PUSH BC");
-	asm("		CALL _randI");
-	asm("		POP BC");
+	asm("		CALL _randI"); //which we can't do directly because randInt is
+	asm("		POP BC");      //a macro, not a function. Had to wrap it in one.
 	asm("		POP BC");
 	asm("	POP BC");
 	asm("	DJNZ __loop13487");
@@ -473,6 +483,21 @@ void main(void) {
 	
 	/* Initialize game variables */
 	memset(&arcade_options,0,sizeof arcade_options);
+	memset(&save,' ',sizeof save);
+	memset(&save.arcopt,0,sizeof save.arcopt);
+	memset(&save.gameopt,0,sizeof save.gameopt);
+	save.version = SAVE_VERSION;
+	if ((slot = ti_Open(filename,"r")) != NULL) {
+		if (ti_GetC(slot)==SAVE_VERSION) {
+			ti_Rewind(slot);
+			ti_Read(&save,1,sizeof save,slot);
+		} else {
+			ti_Close(slot);
+			ti_Delete(filename);
+		}
+	}
+	ti_CloseAll();
+	
 	//TODO: LOAD ARCADE OPTIONS FROM FILE IF POSSIBLE, ELSE INIT LIKE SO:
 	arcade_options.type = TYPE_ARCADE;
 	arcade_options.players = PLAYER1;
@@ -850,6 +875,11 @@ void main(void) {
 			rebuilding = 2;
 			titleptr = setnewtitle();
 		} else break;
+	}
+	if ( slot = ti_Open(filename,"w") != NULL) {
+		ti_Write(&save,1,sizeof save,slot);
+		//ti_SetArchiveStatus(true,slot);
+		ti_Close(slot);
 	}
 	keywait();
 	gfx_End();
