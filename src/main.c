@@ -49,6 +49,8 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define MATCH_TIMEOUT 10
 #define LONG_TIMEOUT 30
 #define MOVESIDE_TIMEOUT 5
+#define DESTRUCT_TIMEOUT 38
+#define SCOREFALL_TIMEOUT 50
 
 #define CHANGE_BUF1 (1<<7)
 #define CHANGE_BUF2 (1<<6)
@@ -1181,9 +1183,6 @@ void rungame(options_t *options) {
 	uint8_t matches_found;
 	uint8_t palette_offset;
 	int tempscore,x,y,templevel;
-	
-RESTARTGAME:
-	
 	moveside_delay = MOVESIDE_TIMEOUT;
 	flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
 	//Generate game static background
@@ -1210,16 +1209,6 @@ RESTARTGAME:
 		kb_Scan();
 		kc = kb_Data[1];
 		kd = kb_Data[7];
-		
-		// DEBUGGING START - DEL KEY CYCLES GAME MODES
-		if (kc&kb_Del) {
-			keywait();
-			if (!((++options->players) %= 3) || options->type == TYPE_ARCADE) {
-				(++options->type) %= 3;
-			}
-			goto RESTARTGAME;
-		}
-		// DEBUGGING END -- REMOVE SECTION BETWEEN WHEN NO LONGER NEEDED
 		
 		if (kc&kb_Mode) { keywait(); ;return; } //For now, exit game immediately
 		//Left/right debouncing no matter the mode
@@ -1249,17 +1238,6 @@ RESTARTGAME:
 			
 			for (i=GRID_START,t=0;i<(GRID_SIZE-GRID_START);++i) {
 				t |= player1.cgrid[i] & (CHANGE_BUF1|CHANGE_BUF2|TILE_FLASHING);
-			}
-			//DEBUGGING
-			if (t) {
-				i=GRID_START;
-				for (y=0;y<13;y++) {
-					for (x=0;x<6;x++,i++) {
-						dbg_sprintf(dbgout,"%i",!!player1.cgrid[i]);
-					}
-					dbg_sprintf(dbgout,"\n");
-				}
-				
 			}
 			if (t) player1.cur_delay = MATCH_TIMEOUT; //And reset timeout if change.
 			//If flashing, wait until timeout to destroy gems fully.
@@ -1308,7 +1286,7 @@ RESTARTGAME:
 				matches_found = gridmatch(&player1);				
 				if (matches_found) {
 					flash_active = 1;
-					flash_countdown = 28;
+					flash_countdown = DESTRUCT_TIMEOUT;
 					player1.jewels += matches_found;
 					if (player1.jewels > 9999) player1.jewels = 9999; //limit
 					//Calculate score -- Not perfect but serviceable.
@@ -1338,7 +1316,7 @@ RESTARTGAME:
 						}
 					}
 					//Process digits into sprites then buffer them.
-					player1.scorefallthrough = 40;
+					player1.scorefallthrough = SCOREFALL_TIMEOUT;
 					t = 0;
 					for (i=0,ptr=numbuf+4;i<5;i++,ptr--) {
 						y -= 16;
@@ -1463,10 +1441,15 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 				tileid = e->grid[grididx];
 				if (tileid >= GRID_EXP1 && tileid <= GRID_EXP7) {
 					gfx_RLETSprite_NoClip((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
-					if (++tileid >GRID_EXP7) tileid = GRID_EMPTY;
-					tilestate |= mask_buf; //Reverse acknowledgement.
+					if (!(main_timer&3)) {
+						tileid++;
+						if (tileid > GRID_EXP7) {
+							tileid = GRID_EMPTY;
+						}
+					}
+					tilestate |= CHANGE_BUF1 | CHANGE_BUF2; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
-					if (!(tilestate&TILE_FLASHING) || main_timer&2) {
+					if (!(tilestate&TILE_FLASHING) || main_timer&8) {
 						if (tilestate&TILE_HALFLINGS) {
 							gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
 						} else {
