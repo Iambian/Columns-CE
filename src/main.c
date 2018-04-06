@@ -1437,11 +1437,13 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 	uint8_t tilestate,tileid,grididx,gridx,gridy,y;
 	unsigned int x;
 	
+	gfx_SetClipRegion(e->grid_left,e->grid_top,e->grid_left+(GRID_W*TILE_W),e->grid_top+(13*TILE_W));
+	
 	main_timer++;
-	y = e->grid_top;
-	grididx = GRID_START;
+	y = e->grid_top+(12*TILE_H); //bottom row
+	grididx = GRID_SIZE-1;
 	for (gridy = GRID_HSTART; gridy < GRID_H; gridy++) {
-		x = e->grid_left;
+		x = e->grid_left+((GRID_W-1)*TILE_W);
 		for (gridx = 0 ; gridx < GRID_W; gridx++) {
 			tilestate = e->cgrid[grididx];
 			if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING)) {
@@ -1454,17 +1456,34 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 					tilestate |= mask_buf; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
 					if (!(tilestate&TILE_FLASHING) || main_timer&2) {
-						gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y);
+						if (tilestate&TILE_HALFLINGS) {
+							gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+						} else {
+							gfx_RLETSprite_NoClip((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y);
+						}
 					}
 				}
 				e->grid[grididx] = tileid;
 			}
 			e->cgrid[grididx] = tilestate;
-			x += TILE_W;
-			grididx++;
+			x -= TILE_W;
+			grididx--;
 		}
-		y += TILE_H;
+		y -= TILE_H;
 	}
+	//Dealing with the half tile crap above the screen
+	x = e->grid_left+((GRID_W-1)*TILE_W);
+	for (gridx=0;gridx<GRID_W;gridx++) {
+		tileid = e->grid[grididx];
+		tilestate = e->cgrid[grididx];
+		if (tilestate&mask_buf && tilestate&TILE_HALFLINGS) {
+			gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+		}
+		e->cgrid[grididx] = tilestate & ~mask_buf;
+		x -= TILE_W;
+		grididx--;
+	}
+	gfx_SetClipRegion(0,0,LCD_WIDTH,LCD_HEIGHT);
 }
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -1613,11 +1632,13 @@ void redrawboard(options_t *options) {
 	}
 	
 	drawgrid(&player1,mask_buf);
-	drawscore(&player1,options);
-	if (options->players == PLAYER2 || options->type == TYPE_ARCADE) { 
-		drawgrid(&player2,mask_buf);
-		drawscore(&player2,options);
-	}
+	//drawscore(&player1,options);
+	
+	
+	// if (options->players == PLAYER2 || options->type == TYPE_ARCADE) { 
+		// drawgrid(&player2,mask_buf);
+		// drawscore(&player2,options);
+	// }
 	
 	
 		
@@ -1636,12 +1657,14 @@ void falldown(entity_t *e) {
 		if (e->cgrid[e->triad_idx]&TILE_HALFLINGS) e->triad_idx += GRID_W;
 	}
 	//dbg_sprintf(dbgout,"Falldown new idx %i\n",e->triad_idx);
-	for (i=GRID_SIZE-1,ip=GRID_SIZE-GRID_W-1;i>GRID_W-1;--i,--ip) {
-		if (e->grid[i]==GRID_EMPTY) {
+	i = GRID_SIZE-1, ip = i-GRID_W;
+	for (;i>GRID_W-1;--i,--ip) {
+		if (e->grid[i]==GRID_EMPTY && e->grid[ip]!=GRID_EMPTY) {
 			//If destination is empty, move towards it.
 			if (e->cgrid[ip]&TILE_HALFLINGS) {
 				e->grid[i]   = e->grid[ip];
 				e->grid[ip]  = GRID_EMPTY;
+				e->cgrid[ip] &= ~TILE_HALFLINGS;
 			} else {
 				e->cgrid[ip] |= TILE_HALFLINGS;
 			}
@@ -1650,21 +1673,9 @@ void falldown(entity_t *e) {
 		} else if (e->cgrid[i]&TILE_HALFLINGS) {
 			//If destination is becoming vacated, only allow tiles not moving
 			//yet to begin movement by adding TILE_HALFLINGS. Else illegals.
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
+			e->cgrid[ip] |= TILE_HALFLINGS | CHANGE_BUF1|CHANGE_BUF2;
+			e->cgrid[i]  |= CHANGE_BUF1|CHANGE_BUF2;
+			e->cgrid[i+GRID_W] |= CHANGE_BUF1|CHANGE_BUF2;
 		}
 	}
 }
