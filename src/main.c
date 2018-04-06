@@ -1247,8 +1247,19 @@ RESTARTGAME:
 		} else if (player1.state == GM_PLAYMATCH) {
 			falldown(&player1);
 			
-			for (i=GRID_START,t=0;i<GRID_SIZE;++i) {
+			for (i=GRID_START,t=0;i<(GRID_SIZE-GRID_START);++i) {
 				t |= player1.cgrid[i] & (CHANGE_BUF1|CHANGE_BUF2|TILE_FLASHING);
+			}
+			//DEBUGGING
+			if (t) {
+				i=GRID_START;
+				for (y=0;y<13;y++) {
+					for (x=0;x<6;x++,i++) {
+						dbg_sprintf(dbgout,"%i",!!player1.cgrid[i]);
+					}
+					dbg_sprintf(dbgout,"\n");
+				}
+				
 			}
 			if (t) player1.cur_delay = MATCH_TIMEOUT; //And reset timeout if change.
 			//If flashing, wait until timeout to destroy gems fully.
@@ -1426,7 +1437,7 @@ RESTARTGAME:
 				}
 			}
 		} else break; //Illegal value - stop playing the game
-		//dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);
+		dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);
 		redrawboard(options);
 		gfx_SwapDraw();
 	}
@@ -1476,13 +1487,16 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 	for (gridx=0;gridx<GRID_W;gridx++) {
 		tileid = e->grid[grididx];
 		tilestate = e->cgrid[grididx];
-		if (tilestate&mask_buf && tilestate&TILE_HALFLINGS) {
-			gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+		if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
+			if (tilestate&mask_buf && tilestate&TILE_HALFLINGS ) {
+				gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+			}
 		}
 		e->cgrid[grididx] = tilestate & ~mask_buf;
 		x -= TILE_W;
 		grididx--;
 	}
+	
 	gfx_SetClipRegion(0,0,LCD_WIDTH,LCD_HEIGHT);
 }
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -1632,13 +1646,13 @@ void redrawboard(options_t *options) {
 	}
 	
 	drawgrid(&player1,mask_buf);
-	//drawscore(&player1,options);
+	drawscore(&player1,options);
 	
 	
-	// if (options->players == PLAYER2 || options->type == TYPE_ARCADE) { 
-		// drawgrid(&player2,mask_buf);
-		// drawscore(&player2,options);
-	// }
+	if (options->players == PLAYER2 || options->type == TYPE_ARCADE) { 
+		drawgrid(&player2,mask_buf);
+		drawscore(&player2,options);
+	}
 	
 	
 		
@@ -1677,11 +1691,13 @@ void falldown(entity_t *e) {
 			e->cgrid[i]  |= CHANGE_BUF1|CHANGE_BUF2;
 			e->cgrid[i+GRID_W] |= CHANGE_BUF1|CHANGE_BUF2;
 		}
+		if (e->grid[i]==GRID_EMPTY) e->cgrid[i] &= ~TILE_HALFLINGS;
 	}
 }
 
 void movedir(entity_t *e, enum Direction dir) {
 	int8_t i,idx,oldidx,temp;
+	temp = 0;
 	//Move idx to left or right if we aren't on a field boundary
 	oldidx = idx = e->triad_idx;
 	if ((dir<0 && idx%GRID_W) || (dir>0 && ((idx+1)%GRID_W))) {
@@ -1705,7 +1721,10 @@ void movedir(entity_t *e, enum Direction dir) {
 	}
 	//If temp has the TILE_HALFLINGS flag set, force the tile below that to
 	//update if idx is not past the bottom of the screen
-	if (idx<GRID_SIZE) e->cgrid[idx] |= CHANGE_BUF1 | CHANGE_BUF2;
+	if (idx<GRID_SIZE && temp&TILE_HALFLINGS) {
+		e->cgrid[idx] |= CHANGE_BUF1 | CHANGE_BUF2;
+		e->cgrid[oldidx] |= CHANGE_BUF1 | CHANGE_BUF2;
+	}
 }
 
 
