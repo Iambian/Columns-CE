@@ -131,6 +131,7 @@ typedef struct entity_t {
 	uint8_t drop_max;      //Maximum speed to drop at. Decided by level
 	uint8_t max_types;     //3,4,5
 	uint8_t stay_delay;    //from MATCH_TIMEOUT to 0 once triad rests on surface
+	uint8_t start_idx;     //Index to start a triad from. Either 2 or 3, dep on mode
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
 	uint8_t grid[GRID_SIZE];  //Gem/explosion IDs
@@ -378,10 +379,10 @@ gfx_sprite_t *grid_spr;
 gfx_sprite_t *greentile;
 gfx_sprite_t *cyantile;
 uint8_t gamestate;
+uint8_t curbuf;
+uint8_t main_timer;
 entity_t player1;
 entity_t player2;
-bool curbuf;
-uint8_t main_timer;
 
 gfx_rletsprite_t *titlebanner;
 
@@ -1091,6 +1092,18 @@ void initgamestate(options_t *opt) {
 	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	//Set initial delay cycles
 	player1.cur_delay = player2.cur_delay = MATCH_TIMEOUT;
+	//Set initial index for triad generation. This position is always closest
+	//to the player's score.
+	if (opt->type == TYPE_ARCADE || opt->players == PLAYER2) {
+		x1=3;
+		x2=2;
+	} else {
+		x1=2;
+		x2=3;
+	}
+	player1.start_idx = x1;
+	player2.start_idx = x2;
+	
 	//Initialize triad
 	gentriad(&player1);
 }
@@ -1343,7 +1356,7 @@ void rungame(options_t *options) {
 				} else {
 					player1.combo = 0;
 					//Emit triad object.
-					player1.triad_idx = t = (player1.playerid==PLAYER1) ? 2 : 3;
+					player1.triad_idx = t = player1.start_idx;
 					dbg_sprintf(dbgout,"Emitting triad objects: ");
 					for (i=0;i<3;++i,t+=GRID_W) {
 						player1.grid[t] = player1.next_triad[i];
@@ -1415,6 +1428,7 @@ void rungame(options_t *options) {
 				}
 			}
 		} else break; //Illegal value - stop playing the game
+		++main_timer;
 		dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);
 		redrawboard(options);
 		gfx_SwapDraw();
@@ -1428,7 +1442,6 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 	
 	gfx_SetClipRegion(e->grid_left,e->grid_top,e->grid_left+(GRID_W*TILE_W),e->grid_top+(13*TILE_W));
 	
-	main_timer++;
 	y = e->grid_top+(12*TILE_H); //bottom row
 	grididx = GRID_SIZE-1;
 	for (gridy = GRID_HSTART; gridy < GRID_H; gridy++) {
@@ -1441,7 +1454,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 				tileid = e->grid[grididx];
 				if (tileid >= GRID_EXP1 && tileid <= GRID_EXP7) {
 					gfx_RLETSprite_NoClip((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
-					if (!(main_timer&3)) {
+					if (!(main_timer&1)) {
 						tileid++;
 						if (tileid > GRID_EXP7) {
 							tileid = GRID_EMPTY;
@@ -1449,7 +1462,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 					}
 					tilestate |= CHANGE_BUF1 | CHANGE_BUF2; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
-					if (!(tilestate&TILE_FLASHING) || main_timer&8) {
+					if (!(tilestate&TILE_FLASHING) || main_timer&4) {
 						if (tilestate&TILE_HALFLINGS) {
 							gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
 						} else {
