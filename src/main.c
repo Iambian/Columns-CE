@@ -411,6 +411,8 @@ gfx_sprite_t *menuborder;
 gfx_rletsprite_t *p1sprite;
 gfx_rletsprite_t *p2sprite;
 gfx_rletsprite_t *downarrow;
+gfx_rletsprite_t *flashgems[6][8];
+gfx_rletsprite_t *magicgems[6];
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 uint8_t numbuf[6];
@@ -948,7 +950,7 @@ gfx_rletsprite_t* decompAndAllocate(void* cmprsprite) {
 /* ========================================================================== */
 
 void initgfx(void) {
-	uint8_t i,j;
+	uint8_t a,i,j;
 	void *baseimg,*flipimg;
 	uint8_t *ptr;
 	int loop;
@@ -1028,6 +1030,16 @@ void initgfx(void) {
 			else ptr[0] += PALSWAP_AREA+12; //Else shift everything up to numpal
 		}
 		scorenum2[i] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+	}
+	//Flash gem graphics
+	for (a=i=0;i<6;++i) {
+		for (j=0;j<8;++j,++a) {
+			flashgems[i][j] = decompAndAllocate(flashgems_tiles_compressed[a]);
+		}
+	}
+	//Magic gem graphics
+	for (i=0;i<6;++i) {
+		magicgems[i] = decompAndAllocate(magicgems_tiles_compressed[i]);
 	}
 }
 
