@@ -13,7 +13,8 @@
 enum GameState {GM_TITLE=0,GM_MAINMENU,
 				GM_ARCADEOPTIONS, //This is an in-field menu
 				GM_GAMEMENU,GM_GAMEOPTIONS,GM_GAMEPREVIEW,
-				GM_PLAYSTART,GM_PLAYMATCH,GM_PLAYMOVE, GM_GAMEOVER,
+				GM_PLAYSTART,GM_PLAYSTART2,
+				GM_PLAYMATCH,GM_PLAYMOVE,GM_GAMEOVER,
 				GM_OPTIONS,GM_GOTOMAIN};
 enum GameType { TYPE_ARCADE = 0, TYPE_ORIGINAL, TYPE_FLASH };
 enum Players {PLAYER1 = 0, PLAYER2, DOUBLES };
@@ -28,6 +29,9 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #define FONT_WHITE 2
 #define FONT_GOLD 3
 #define FONT_CYAN 4
+#define MENU_GOLD 5
+#define MENU_MAROON 6
+#define MENU_LAVENDER 7
 
 #define BG_TRANSPARENT 0
 #define BG_BLACK 1
@@ -132,6 +136,11 @@ typedef struct entity_t {
 	uint8_t max_types;     //3,4,5
 	uint8_t stay_delay;    //from MATCH_TIMEOUT to 0 once triad rests on surface
 	uint8_t start_idx;     //Index to start a triad from. Either 2 or 3, dep on mode
+	uint8_t subsecond;     // 1/64th of a second.
+	uint8_t secondsleft;   // For menu timing
+	uint8_t menuoption;    // Current menu option
+	uint8_t baselevel;     //this plus level based on jewels destroyed
+	
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
 	uint8_t grid[GRID_SIZE];  //Gem/explosion IDs
@@ -413,6 +422,8 @@ gfx_rletsprite_t *p2sprite;
 gfx_rletsprite_t *downarrow;
 gfx_rletsprite_t *flashgems[6][8];
 gfx_rletsprite_t *magicgems[6];
+
+gfx_rletsprite_t *arcadeselect;
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 uint8_t numbuf[6];
@@ -793,7 +804,7 @@ void main(void) {
 		} else if (gamestate == GM_GAMEPREVIEW) {  //Preview of selected options b4 starting
 			if (kc&kb_Mode) gamestate = GM_GAMEOPTIONS;
 			if (kc&kb_2nd) {
-				continue; //DEBUG: DON'T DO ANY OF THIS STUFF YET.
+				//continue; //DEBUG: DON'T DO ANY OF THIS STUFF YET.
 				game_options.p1_class += NOVICE;  //convert.
 				game_options.p2_class += NOVICE;  //convert.
 				//Start the game...
@@ -974,6 +985,7 @@ void initgfx(void) {
 	p1sprite = decompAndAllocate(p1_compressed);
 	p2sprite = decompAndAllocate(p2_compressed);
 	downarrow = decompAndAllocate(downarrow_compressed);
+	arcadeselect = decompAndAllocate(arcadeselect_compressed);
 	//Font data abbreviated
 	gfx_SetFontData(font-(32*8));
 	fontspacing = malloc(128);
@@ -1063,7 +1075,7 @@ void initgamestate(options_t *opt) {
 		player2.grid_left = player1.grid_left = CENTER_GRIDLEFT;
 	}
 	//Set game state
-	player1.state = player2.state = GM_PLAYMATCH;  //guarantees triad placement
+	player1.state = player2.state = GM_PLAYSTART;
 	//Set maximum gem types
 	if (opt->type == TYPE_ARCADE) {
 		player1.max_types = 5;
@@ -1098,6 +1110,9 @@ void initgamestate(options_t *opt) {
 		player1.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
 		player2.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
 		player1.drop_max = player2.drop_max = LONG_TIMEOUT;
+	} else {
+		player1.baselevel = opt->p1_level;
+		player2.baselevel = opt->p2_level;
 	}
 	//Set up dgrid to force initial render
 	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
@@ -1194,10 +1209,55 @@ void drawgamebg(options_t *options) {
 	}
 }
 
+void refreshgrid(entity_t *e) {
+	uint8_t i;
+	for(i=0;i<GRID_SIZE;i++) {
+		e->cgrid[i] |= CHANGE_BUF1|CHANGE_BUF2;
+	}
+}
+
+void drawarcademenu(entity_t *e,uint8_t showcursor) {
+	uint8_t i,t,y,oldy;
+	int x;
+	
+	x = e->grid_top;
+	oldy = y = e->grid_left+48;
+	
+	gfx_SetColor(MENU_GOLD);
+	gfx_FillRectangle_NoClip(x,y,96,96);
+	gfx_SetColor(MENU_MAROON);
+	gfx_FillRectangle_NoClip(x+2,y+2,(96-4),(96-4));
+	if (e->menuoption==0) {
+		t = 8;
+		y += 24;
+	} else if (e->menuoption==1) {
+		t = 16;
+		y += 48;
+	} else {
+		t = 16;
+		y += 72;
+	}
+	gfx_SetColor(MENU_LAVENDER);
+	if (showcursor)	gfx_FillRectangle_NoClip(x+2,y,(96-4),t);
+	gfx_RLETSprite(arcadeselect,x+6,oldy+6);
+	gfx_SetTextBGColor(BG_TRANSPARENT);
+	gfx_SetTextFGColor(FONT_GOLD);
+	gfx_PrintStringXY("time ",x+24,oldy+104);
+	gfx_PrintUInt(e->secondsleft-2,2);
+	refreshgrid(e);
+}
+
+
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 void rungame(options_t *options) {
 	uint8_t i,t,idx;
 	uint8_t moveside_active,moveside_delay;
 	uint8_t shuffle_active;
+	uint8_t menu_active;
 	uint8_t timer_p1,timer_p2;
 	kb_key_t kd,kc;
 	uint8_t *ptr;
@@ -1209,7 +1269,7 @@ void rungame(options_t *options) {
 	uint8_t palette_offset;
 	int tempscore,x,y,templevel;
 	moveside_delay = MOVESIDE_TIMEOUT;
-	flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
+	menu_active = flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
 	//Generate game static background
 	
 	if (options->type == TYPE_ARCADE) {
@@ -1248,15 +1308,96 @@ void rungame(options_t *options) {
 				moveside_delay = MOVESIDE_TIMEOUT;
 			}
 		} else moveside_active = 0;
+		//Up/down key debouncing (but only if in menu)
+		if (kd&(kb_Up|kb_Down) && (player1.state != GM_PLAYMOVE)) {
+			if (menu_active) { 
+				kd &= ~(kb_Up|kb_Down);
+			} else {
+				menu_active = 1;
+			}
+		} else menu_active = 0;
 		//2nd key debouncing
 		if (kc&kb_2nd) {
 			if (shuffle_active) kc &= ~kb_2nd;
 			else shuffle_active = 1;
 		} else shuffle_active = 0;
 		
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		if (player1.state == GM_PLAYSTART) {
-			
-			
+			redrawboard(options);
+			if (options->type == TYPE_ARCADE) {
+				if (!player1.subsecond) {
+					player1.subsecond = 64;
+					if (!player1.secondsleft) player1.secondsleft = 12;
+					if (player1.secondsleft == 2) {
+						player1.state = GM_PLAYSTART2;
+						player1.subsecond = 96;
+						continue;
+					}
+					player1.secondsleft--;
+				}
+				if (kc&kb_2nd) {
+					player1.state = GM_PLAYSTART2;
+					player1.subsecond = 96;
+					continue;
+				}
+				if (kd&kb_Down) {
+					player1.menuoption++;
+					if (player1.menuoption>2) player1.menuoption = 0;
+				}
+				if (kd&kb_Up) {
+					if (!player1.menuoption) player1.menuoption = 3;
+					player1.menuoption--;
+				}
+				drawarcademenu(&player1,true);
+			} else {
+				if (!player1.secondsleft) player1.secondsleft = 4;
+				if (!player1.subsecond) {
+					player1.subsecond = 64;
+					player1.secondsleft--;
+					if (player1.secondsleft == 1) {
+						player1.state = GM_PLAYMATCH;
+						refreshgrid(&player1);
+						continue;
+					}
+				}
+				x = player1.grid_left;
+				y = player1.grid_top;
+				gfx_SetTextBGColor(BG_TRANSPARENT);
+				gfx_SetTextFGColor(FONT_GOLD);
+				gfx_PrintStringXY("game start",x+8,y+104);
+			}
+			player1.subsecond--;
+			gfx_SwapDraw();
+			continue;
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
+		} else if (player1.state == GM_PLAYSTART2) {
+			redrawboard(options);
+			player1.subsecond--;
+			if (options->type == TYPE_ARCADE) {
+				if (!player1.subsecond) {
+					t = player1.menuoption;
+					initgamestate(options);
+					player1.state = GM_PLAYMATCH;
+					if (t==0) {
+						player1.baselevel = 0;
+					} else if (t==1) {
+						player1.score[4] = 2;
+						player1.baselevel = 5;
+						
+					} else {
+						player1.score[4] = 5;
+						player1.baselevel = 10;
+					}
+					player1.updating |= UPDATE_SCORE|UPDATE_LEVEL;
+					continue;
+				}
+				drawarcademenu(&player1,player1.subsecond&4);
+			} else {
+				
+			}
+			gfx_SwapDraw();
+			continue;
 			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_PLAYMATCH) {
 			falldown(&player1);
@@ -1619,7 +1760,7 @@ void drawscore(entity_t *e, options_t *opt) {
 				}
 			} else if (i == SOBJ_LEVELSUB && (e->updating&UPDATE_LEVEL)) {
 				//Pring levels
-				printuint(e->level,x,y,3);
+				printuint(e->level+e->baselevel,x,y,3);
 			} else if (i == SOBJ_JEWELSSUB && (e->updating&UPDATE_JEWELS)) {
 				//Print jewels/class
 				dbg_sprintf(dbgout,"Updating jewels: %i\n",e->jewels);
