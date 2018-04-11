@@ -379,6 +379,7 @@ uint8_t gridmatch(entity_t *e);  //returns number of blocks matched, mods cgrid
 #include "gfx/bg_gfx.h"      //Background stuffs
 #include "gfx/score_gfx.h"   //Scores
 #include "gfx/title_gfx.h"   //Title graphics. Large enough to have own gravity
+#include "gfx/char_gfx.h"
 
 /* ---------------------- Put all your globals here ------------------------- */
 gfx_rletsprite_t *gems_spr[gems_tiles_num];
@@ -424,6 +425,54 @@ gfx_rletsprite_t *flashgems[6][8];
 gfx_rletsprite_t *magicgems[6];
 
 gfx_rletsprite_t *arcadeselect;
+
+#define SYM_APO 0
+#define SYM_EXC 1 
+#define SYM_A 2
+#define SYM_D 3
+#define SYM_E 4
+#define SYM_G 5
+#define SYM_I 6
+#define SYM_M 7
+#define SYM_N 8
+#define SYM_O 9
+#define SYM_R 10
+#define SYM_T 11
+#define SYM_U 12
+#define SYM_V 13
+#define SYM_Y 14
+
+uint8_t *chars[] = {
+	s__apo_compressed,
+	s__exc_compressed,
+	s_A_compressed,
+	s_D_compressed,
+	s_E_compressed,
+	s_G_compressed,
+	s_I_compressed,
+	s_M_compressed,
+	s_N_compressed,
+	s_O_compressed,
+	s_R_compressed,
+	s_T_compressed,
+	s_U_compressed,
+	s_V_compressed,
+	s_Y_compressed,
+};
+
+gfx_rletsprite_t *gameoverspr[8][2];
+gfx_rletsprite_t *youdiditspr[13][2];
+
+uint8_t gameoverchr[8] = {SYM_G,SYM_A,SYM_M,SYM_E,SYM_O,SYM_V,SYM_E,SYM_R};
+uint8_t youdiditchr[13]= 
+{	SYM_Y,SYM_O,SYM_U,SYM_APO,SYM_V,SYM_E,
+	SYM_D,SYM_O,SYM_N,SYM_E,SYM_I,SYM_T,SYM_EXC
+};
+
+uint8_t gameoverpos[8] = {6,16,26,36,54,64,74,85};
+uint8_t youdiditpos[13]= {21,30,41,50,97,70,12,22,33,42,59,67,79};
+
+
 
 uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
 uint8_t numbuf[6];
@@ -956,6 +1005,23 @@ gfx_rletsprite_t* decompAndAllocate(void* cmprsprite) {
 	
 	return img;
 }
+
+
+void decompAndVaryChars(uint8_t ch, gfx_rletsprite_t **v) {
+	uint8_t *baseimg,*ptr;
+	uint8_t i;
+
+	baseimg = (uint8_t*) gfx_vbuffer;
+	
+	dzx7_Turbo(chars[ch],baseimg);
+	i = baseimg[0]*baseimg[1];
+	v[0] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+	for (ptr=baseimg+2; i; i--)  if (ptr[0]==8||ptr[0]==9) ptr[0]+=2;
+	v[1] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
+}
+
+
+
 /* ========================================================================== */
 /* ========================================================================== */
 /* ========================================================================== */
@@ -1052,6 +1118,14 @@ void initgfx(void) {
 	//Magic gem graphics
 	for (i=0;i<6;++i) {
 		magicgems[i] = decompAndAllocate(magicgems_tiles_compressed[i]);
+	}
+	//"Game over" graphics
+	for (i=0;i<8;i++) {
+		decompAndVaryChars(gameoverchr[i],&gameoverspr[i]);
+	}
+	//"You've done it" graphics
+	for (i=0;i<13;i++) {
+		decompAndVaryChars(youdiditchr[i],&youdiditspr[i]);
 	}
 }
 
@@ -1459,7 +1533,7 @@ void rungame(options_t *options) {
 					player1.combo++;
 					i = (matches_found+2)/3;
 					i = (i>3)?3:i;  //Lim 3
-					tempscore = ((int)i) * (player1.level+1) * (player1.combo) * 30;
+					tempscore = ((int)i) * (player1.level+player1.baselevel+1) * (player1.combo) * 30;
 					//Extract digits.
 					for (i=0,ptr=numbuf; i<5; i++,ptr++) {
 						player1.scoreadd[i] = ptr[0] = tempscore%10;
