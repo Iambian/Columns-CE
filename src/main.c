@@ -7,91 +7,9 @@
  *--------------------------------------
 */
 
-#define VERSION_INFO 0.1
-#define SAVE_VERSION 1
+#include "defs.h"
+#include "types.h"
 
-enum GameState {GM_TITLE=0,GM_MAINMENU,
-				GM_ARCADEOPTIONS, //This is an in-field menu
-				GM_GAMEMENU,GM_GAMEOPTIONS,GM_GAMEPREVIEW,
-				GM_PLAYSTART,GM_PLAYSTART2,
-				GM_PLAYMATCH,GM_PLAYMOVE,GM_GAMEOVER,
-				GM_OPTIONS,GM_GOTOMAIN};
-enum GameType { TYPE_ARCADE = 0, TYPE_ORIGINAL, TYPE_FLASH };
-enum Players {PLAYER1 = 0, PLAYER2, DOUBLES };
-enum Difficulty { NOVICE = 3, AMATEUR, PRO,
-				  EASIEST, EASY, NORMAL, HARD};
-enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
-
-
-#define GRIDSTART_X 5
-#define GRIDSTART_Y 5
-// As specified (rather obliquely) in convpng.ini
-#define FONT_WHITE 2
-#define FONT_GOLD 3
-#define FONT_CYAN 4
-#define MENU_GOLD 5
-#define MENU_MAROON 6
-#define MENU_LAVENDER 7
-
-#define BG_TRANSPARENT 0
-#define BG_BLACK 1
-#define BG_WHITE 2
-
-
-//original NOV 50, arcade 35,
-
-#define GRID_W 6
-#define GRID_H 15
-#define GRID_HSTART 2
-#define GRID_START GRID_HSTART*GRID_W
-#define GRID_SIZE GRID_W*GRID_H
-#define TILE_W 16
-#define TILE_H 16
-#define GRID_TBTM (GRID_SIZE-(GRID_W*3))
-#define GRID_BELOW (GRID_W*3)
-
-#define MATCH_TIMEOUT 10
-#define LONG_TIMEOUT 30
-#define MOVESIDE_TIMEOUT 5
-#define DESTRUCT_TIMEOUT 38
-#define SCOREFALL_TIMEOUT 50
-
-#define CHANGE_BUF1 (1<<7)
-#define CHANGE_BUF2 (1<<6)
-#define TILE_FLASHING (1<<5)
-#define TILE_HALFLINGS (1<<4)
-#define TILE_TARGET_GEM (1<<3)
-
-#define UPDATE_SCORE ((1<<0)|(1<<4))
-#define UPDATE_LEVEL ((1<<1)|(1<<5))
-#define UPDATE_JEWELS ((1<<2)|(1<<6))
-#define UPDATE_NEXT ((1<<3)|(1<<7))
-
-#define P1_GRIDLEFT 16
-#define P2_GRIDLEFT 208
-#define CENTER_GRIDLEFT 112
-
-#define PALSWAP_AREA 192
-
-
-#define GRID_EMPTY 0x00
-#define GRID_GEM1 0x01
-#define GRID_GEM2 0x02
-#define GRID_GEM3 0x03
-#define GRID_GEM4 0x04
-#define GRID_GEM5 0x05
-#define GRID_GEM6 0x06
-//Insert other gems here
-
-
-#define GRID_EXP1 0x07
-#define GRID_EXP2 0x08
-#define GRID_EXP3 0x09
-#define GRID_EXP4 0x0A
-#define GRID_EXP5 0x0B
-#define GRID_EXP6 0x0C
-#define GRID_EXP7 0x0D
-//Not an actual sprite code. 
 
 
 /* Keep these headers */
@@ -112,73 +30,6 @@ enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 #include <graphx.h>
 #include <decompress.h>
 #include <fileioc.h>
-
-typedef struct numsprite_t {
-	gfx_rletsprite_t *sprite;
-	int ypos;
-	int xpos;
-} numsprite_t;
-
-typedef struct entity_t {
-	enum Players playerid; //
-	unsigned int grid_top; //pixel position. Best use 16 here.
-	uint8_t grid_left;     //px pos. 112 in single, 16/208 in 2player
-	uint8_t triad_idx;     //X+Y*GRID_WIDTH, where X,Y is topmost block in triad
-	unsigned int level;    //Player's level
-	uint8_t score[8];      //player's current score (in digits) LSB-first
-	uint8_t scoreadd[5];   //5 digits to add to score[3:8]
-	unsigned int jewels;   //Number of jewels total player has blown up (digits)
-	uint8_t combo;         //Player's current combo
-	uint8_t matches;       //9 match cycles (matchlen not considered) is level++
-	enum GameState state;  //GM_PLAYMATCH or GM_PLAYMOVE
-	uint8_t cur_delay;     //Unified delay cycles
-	uint8_t drop_max;      //Maximum speed to drop at. Decided by level
-	uint8_t max_types;     //3,4,5
-	uint8_t stay_delay;    //from MATCH_TIMEOUT to 0 once triad rests on surface
-	uint8_t start_idx;     //Index to start a triad from. Either 2 or 3, dep on mode
-	uint8_t subsecond;     // 1/64th of a second.
-	uint8_t secondsleft;   // For menu timing
-	uint8_t menuoption;    // Current menu option
-	uint8_t baselevel;     //this plus level based on jewels destroyed
-	
-	
-	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
-	uint8_t grid[GRID_SIZE];  //Gem/explosion IDs
-	uint8_t cgrid[GRID_SIZE]; //Board state flags (changing, flashing, etc)
-	numsprite_t nums[5];      //Up to five digits
-	int scoreybase;           //Y position of base scorebox
-	uint8_t scorefallthrough; //Countdown frm 16 for drop. Higher vals ignored
-	uint8_t updating;         //Flags based on UPDATE_XXXX defines
-} entity_t;
-
-typedef struct options_t {
-	enum GameType type;
-	enum Players players;
-	enum Difficulty p1_class;
-	enum Difficulty p2_class;
-	bool time_trial;
-	uint8_t p1_level;  //doubles as column height in Flash columns mode
-	uint8_t p2_level;
-	uint8_t bgm;
-} options_t;
-
-typedef struct score_t {
-	char name[4];     //3 character name, zero-terminated
-	char digits[10];  //8 digit score or 5 digit time, zero terminated.
-} score_t;
-
-typedef struct dblscore_t {
-	char name[4];     //3 character name, zero-terminated
-	char digits[10];  //8 digit score or 5 digit time, zero terminated.
-	char name2[4];    //[IF USED] 3 ch name, zero-terminated.
-} dblscore_t;
-
-typedef struct arcscore_t {
-	char name[4];     //3 ch name, 0-term
-	char digits[10];  //8 ch score, 0-term
-	char jewels[5];   //4 ch jewels (max 9999), 0-term
-	char level[4];    //3 ch levels (theoretical max 285), 0-term
-} arcscore_t;
 
 struct {
 	uint8_t version;
@@ -230,39 +81,6 @@ uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
 
 char *filename = "ColumDAT";
 
-#define BG_CENT 0
-#define BG_NEXT 1
-//The arrow points to the right
-#define BG_SCORE 2
-#define BG_SCOREF 3
-#define BG_B8D 4
-#define BG_B8DF 5
-#define BG_B5D 6
-#define BG_B5DF 7
-#define BG_B4D 8
-#define BG_B4DF 9
-#define BG_B3D 10
-#define BG_B3DF 11
-#define BG_T8D 12
-#define BG_T5D 13
-#define BG_T4D 14
-#define BG_T3D 15
-
-#define SOBJ_NEXT 0
-#define SOBJ_SCOREMAIN 1
-#define SOBJ_LEVELMAIN 2
-#define SOBJ_JEWELSMAIN 3
-#define SOBJ_CURSCORE 4
-#define SOBJ_SCORESUB 5
-#define SOBJ_LEVELSUB 6
-#define SOBJ_JEWELSSUB 7
-
-#define PMODE_NORMAL 0
-#define PMODE_FLASH 1
-#define PMODE_SPANE 0
-#define PMODE_DPANE 1 
-
-#define TYPE_USE2PANE
 //[normal/flash][single/dual panes][playerid][objidx][x,y,spriteType]
 uint8_t posarr[2][2][2][8][3]= {
 	{	//Normal (not-flash) mode. Includes arcade mode.
@@ -426,21 +244,6 @@ gfx_rletsprite_t *magicgems[6];
 
 gfx_rletsprite_t *arcadeselect;
 
-#define SYM_APO 0
-#define SYM_EXC 1 
-#define SYM_A 2
-#define SYM_D 3
-#define SYM_E 4
-#define SYM_G 5
-#define SYM_I 6
-#define SYM_M 7
-#define SYM_N 8
-#define SYM_O 9
-#define SYM_R 10
-#define SYM_T 11
-#define SYM_U 12
-#define SYM_V 13
-#define SYM_Y 14
 
 uint8_t *chars[] = {
 	s__apo_compressed,
