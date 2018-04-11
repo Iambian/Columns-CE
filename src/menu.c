@@ -1,0 +1,518 @@
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <tice.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <debug.h>
+#include <keypadc.h>
+#include <graphx.h>
+#include <decompress.h>
+#include <fileioc.h>
+
+#include "defs.h"
+#include "types.h"
+#include "main.h"
+#include "gfx.h"
+#include "game.h"
+
+#include "gfx/title_gfx.h"
+
+
+char *mainmenu[] = {" select "," arcade"," menu"," options"," quit"};
+char *gameselmenu1[] = {"original game","flash columns"};
+char *gameselmenu2[] = {"1 player","2 players","doubles"};
+char *classes[] = {"novice","amateur","pro"};
+char *levelnums[] = {"0","1","2","3","4","5","6","7","8","9"};
+char *bgms[] = {"clotho","lathesis","atropos"};
+char *noyes[] = {"no","yes"};
+char *previewgame[] = {"original","flash columns"};
+
+uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
+
+/* ----------------------- Define your constants here ------------------------*/
+uint8_t gamecursory1;    // Up/down changes these and indexes to gamecursorx.
+uint8_t gamecursory2;    // Controlled remotely by other calculator.
+uint8_t *gamecursorx1[4]; //  Points to the options dialog...
+uint8_t *gamecursorx2[4]; //  ...entity each Y position index.
+
+
+/* ----------------------- Function prototypes goes here ---------------------*/
+void drawTitleGFX(void *titleptr);
+void *selectNewTitle(void);
+void drawMenuBG(void);
+void dispCursor(x,y,yidx,xidx,prevcursor);
+void *getScorePtr(options_t *options);
+
+/* ----------------------- Define all your functions here --------------------*/
+void main_menu_loop(void) {
+	uint8_t i,j,k,t,idxlimit;
+	uint8_t mx,my;
+	uint8_t y,dy,oldy;
+	uint8_t curopt;
+	uint8_t debounce;
+	uint8_t gamestate;
+	unsigned int x,dx,oldx,newx,tx;
+	kb_key_t kd,kc;
+	options_t *arcopt;
+	options_t gameopt;
+	char *s;
+	char **ss;
+	void *titleptr;
+	
+	arcopt = &save.arcopt;
+	memset(&gameopt,0,sizeof gameopt);
+	
+	gamestate = GM_LOADINGTITLE;
+	curopt = debounce = 0;
+	
+	while (1) {
+		++main_timer;
+		kb_Scan();
+		kc = kb_Data[1];
+		kd = kb_Data[7];
+		if (kc|kd) {
+			if (debounce) kc = kd = 0;
+			debounce = 1;
+		} else debounce = 0;
+		
+		switch (gamestate) {
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_LOADINGTITLE:
+				titleptr = selectNewTitle();
+				drawTitleGFX(titleptr);
+				drawTitleGFX(titleptr);
+				gamestate = GM_MAINMENU;
+				curopt = 0;
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_TITLE:
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_MAINMENU:
+				if (kc&kb_Mode) return;
+				gfx_SetTextBGColor(BG_BLACK);
+				gfx_SetTextFGColor(FONT_WHITE);
+				gfx_SetColor(BG_WHITE);
+				gfx_FillRectangle_NoClip(112,137,96,69); //8px taller, downward
+				gfx_SetColor(BG_BLACK);
+				gfx_FillRectangle_NoClip(115,141,90,62); //8px taller, downward
+				for (i=0,y=136; i<5; ++i,y+=14) {
+					gfx_PrintStringXY(mainmenu[i],128,y);
+				}
+				gfx_SetTextXY(120,148+(14*curopt));
+				gfx_PrintChar(']');
+				if (kd|kc) {
+					if (kd&kb_Up) curopt--;
+					if (kd&kb_Down) curopt++;
+					curopt &= 3;
+					if (kc&kb_2nd) {
+						gamestate = mainmenustate[curopt];
+						curopt = 0;
+					}
+				}
+				gfx_SetTextBGColor(BG_TRANSPARENT);
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_GAMEMENU:
+				if (kc&kb_Mode) gamestate = GM_LOADINGTITLE;
+				if (kc&kb_2nd) {
+					memset(gamecursorx1,0,sizeof gamecursorx1);
+					memset(gamecursorx2,0,sizeof gamecursorx2);
+					memset(&gameopt,0,sizeof gameopt);
+					//Write game type
+					gameopt.type = (curopt&1) ? TYPE_FLASH : TYPE_ORIGINAL;
+					//Write number of players
+					gameopt.players = (enum Players) curopt>>1;
+					//Game class is the same across all modes of play
+					gamecursorx1[0] = (uint8_t*) &gameopt.p1_class;
+					gamecursorx2[0] = (uint8_t*) &gameopt.p2_class;
+					//Game level uses the same indices. Is translated on game init
+					gamecursorx1[1] = &gameopt.p1_level;
+					gamecursorx2[1] = &gameopt.p2_level;
+					//All original game and only 2 player flash columns mode uses
+					//time_trial flags, tho for flash, it means match play.
+					//Otherwise, it's all about the BGM (which this ver don't got)
+					if (!(curopt&1) || curopt==3) {
+						gamecursorx1[2] = &gameopt.time_trial;
+					} else gamecursorx1[2] = &gameopt.bgm;
+					
+					//Final option is BGM, except in flash 1p/dbls where it's blank.
+					if (curopt==1 || curopt==5) gamecursorx1[3] = NULL;
+					else                        gamecursorx1[3] = &gameopt.bgm;
+					//if (curopt>1) continue; /*disallow 2player modes*/
+					gamecursory2 = gamecursory1 = 0;
+					gamestate = GM_GAMEOPTIONS;
+				}
+				
+				if (kd) {
+					if (kd&kb_Up) {
+						if (curopt<2) curopt+=6;
+						curopt -= 2;
+					}
+					if (kd&kb_Down) {
+						if (curopt>3) curopt-=6;
+						curopt += 2;
+					}
+					if (kd&kb_Left) {
+						if (!(curopt&1)) curopt += 2;
+						curopt--;
+					}
+					if (kd&kb_Right) {
+						if (curopt&1) curopt -= 2;
+						curopt++;
+					}
+				}
+				drawMenuBG();
+				gfx_SetTextBGColor(BG_TRANSPARENT);
+				gfx_SetTextFGColor(FONT_GOLD);
+				for (i=0,x=48;i<2;i++,x+=120) {
+					gfx_PrintStringXY(gameselmenu1[i],x,72);
+				}
+				gfx_SetTextFGColor(FONT_WHITE);
+				gfx_PrintStringXY("menu",144,40);
+				for (i=0,y=96;i<6;y+=24) {
+					for(x=48;x<200;i++,x+=120) {
+						if (i==curopt) {
+							gfx_SetTextFGColor(FONT_CYAN);
+							gfx_SetTextXY(x,y);
+							gfx_PrintChar(']');
+							gfx_SetTextFGColor(FONT_WHITE);
+						}
+						gfx_PrintStringXY(gameselmenu2[i>>1],x+16,y);
+					}
+				}
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_GAMEOPTIONS:
+				if (kc&kb_Mode) gamestate = GM_GAMEMENU;
+				if (kc&kb_2nd) {
+					//There really is no need to convert values. All values
+					//are mirrored from the actual gameopt struct
+					//via pointer shenaningans.
+					gamestate = GM_GAMEPREVIEW;
+				}
+				
+				if (kd) {
+					//Handle up/down
+					idxlimit = (curopt!=1 && curopt!=5)?3:2;
+					if (kd&kb_Down) {
+						if (gamecursory1<idxlimit) {
+							gamecursory1++;
+						} else gamecursory1 = 0;
+					}
+					if (kd&kb_Up) {
+						if (gamecursory1) gamecursory1--;
+						else gamecursory1 = idxlimit;
+					}
+					//Handle left/right
+					switch (gamecursory1) {
+						case 0:
+							idxlimit = 2;
+							break;
+						case 1:
+							if (curopt&1) idxlimit = 7;
+							else idxlimit = 9;
+							break;
+						case 2:
+							if (curopt==1 || curopt==5) idxlimit = 2;
+							else idxlimit = 1;
+							break;
+						case 3:
+							if (curopt==1 || curopt==5) idxlimit = 0;
+							else idxlimit = 2;
+							break;
+						default:
+							idxlimit = 0;
+							break;
+					}
+					if (kd&kb_Left) {
+						if (*gamecursorx1[gamecursory1]) {
+							--*gamecursorx1[gamecursory1];
+						} else {
+							*gamecursorx1[gamecursory1] = idxlimit;
+						}
+					}
+					if (kd&kb_Right) {
+						if (*gamecursorx1[gamecursory1]<idxlimit) {
+							++*gamecursorx1[gamecursory1];
+						} else {
+							*gamecursorx1[gamecursory1] = 0;
+						}
+					}
+				}
+				drawMenuBG();
+				//Draw menu text here.
+				for (x=40,y=32,i=0;i<((curopt==1||curopt==5)?3:4);i++) {
+					switch (i) {
+						case 0:
+							s = "class";
+							break;
+						case 1:
+							if (curopt&1) s = "height";
+							else          s = "level";
+							break;
+						case 2:
+							if (curopt==1 || curopt == 5) s = "bgm";
+							else if (curopt&1) s = "match";
+							else s = "time trial";
+							break;
+						case 3:
+							if (!(curopt == 1 || curopt == 5)) s = "bgm";
+							else s = "";
+							break;
+						default:
+							s = "";
+							break;
+					}
+					gfx_SetTextFGColor(FONT_GOLD);
+					gfx_PrintStringXY(s,x,y);
+					newx = x+24;
+					y += 24;
+					switch (i) {
+						case 0:
+							ss = classes;
+							idxlimit = 3;
+							dx = 72;
+							break;
+						case 1:
+							if (curopt&1) {
+								ss = levelnums+2;
+								idxlimit = 8;
+							} else {
+								ss = levelnums;
+								idxlimit = 10;
+							}
+							dx = 16;
+							break;
+						case 2:
+							if ( curopt == 1 || curopt == 5) {
+								ss = bgms;
+								idxlimit = 3;
+								dx = 80;
+							} else {
+								ss = noyes;
+								idxlimit = 2;
+								dx = 40;
+							}
+							break;
+						case 3:
+							if ( curopt == 1 || curopt == 5) {
+								ss = NULL;
+								idxlimit = 0;
+								dx = 0;
+							} else {
+								ss = bgms;
+								idxlimit = 3;
+								dx = 80;
+							}
+							break;
+						default:
+							ss = NULL;
+							idxlimit = 0;
+							dx = 0;
+							break;
+					}
+					
+					gfx_SetTextFGColor(FONT_WHITE);
+					if (ss) {
+						for (j=0;j<idxlimit;j++,newx+=dx) {
+							gfx_PrintStringXY(ss[j],newx,y);
+							dispCursor(newx,y,i,j,curopt);
+						}
+					}
+					y += 24;
+				}
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_GAMEPREVIEW:
+				if (kc&kb_Mode) gamestate = GM_GAMEOPTIONS;
+				if (kc&kb_2nd) {
+					//continue; //DEBUG: DON'T DO ANY OF THIS STUFF YET.
+					gameopt.p1_class += NOVICE;  //convert.
+					gameopt.p2_class += NOVICE;  //convert.
+					//Start the game...
+					initGameState(&gameopt);
+					runGame(&gameopt);
+				}
+				drawMenuBG();
+				//Draw menu text
+				gfx_SetTextFGColor(FONT_GOLD);
+				gfx_PrintStringXY("game  : ",x=96,y=40);
+				gfx_SetTextFGColor(FONT_WHITE);
+				gfx_PrintString(previewgame[gameopt.type==TYPE_FLASH]);
+				y+=16;
+				if (curopt!=2 && curopt!=3) {
+					gfx_SetTextFGColor(FONT_GOLD);
+					gfx_PrintStringXY("class : ",x,y);
+					gfx_SetTextFGColor(FONT_WHITE);
+					gfx_PrintString(classes[gameopt.p1_class]);
+					y+=16;
+				}
+				if (curopt==1 || curopt == 5) {
+					gfx_SetTextFGColor(FONT_GOLD);
+					gfx_PrintStringXY("height: ",x,y);
+					gfx_SetTextFGColor(FONT_WHITE);
+					gfx_PrintString((levelnums+2)[gameopt.p1_level]);
+					//y+=16;
+				}
+		
+				if ((!(curopt&1) || curopt ==3) && gameopt.time_trial) {
+					gfx_SetTextFGColor(FONT_CYAN);
+					if (!(curopt&1)) s = "time trial mode";
+					else             s = "match play mode";
+					gfx_PrintStringXY(s,x,y);
+				}
+				y+=24;
+				//1 or 2 player stats
+				if (curopt==2 || curopt==3) {
+					idxlimit = 2;
+					x = 24;
+				} else {
+					idxlimit = 1;
+				}
+				oldy = y;
+				oldx = x;
+				for (i=0;i<idxlimit;i++,x+=152) {
+					y = oldy;
+					if (idxlimit-1) {
+						gfx_SetTextFGColor(FONT_GOLD);
+						gfx_PrintStringXY("player ",x+24,y);
+						gfx_PrintString((levelnums+1)[i]);
+						y += 24;
+						t = (!i)?gameopt.p1_class:gameopt.p2_class;
+						gfx_PrintStringXY("class : ",x,y);
+						gfx_SetTextFGColor(FONT_WHITE);
+						gfx_PrintString(classes[t]);
+						if (curopt==3) {
+							y += 16;
+							t = (!i)?gameopt.p1_level:gameopt.p2_level;
+							gfx_SetTextFGColor(FONT_GOLD);
+							gfx_PrintStringXY("height:   ",x,y);
+							gfx_SetTextFGColor(FONT_WHITE);
+							gfx_PrintString((levelnums+2)[t]);
+						}
+						y +=24;
+					}
+					x += (curopt&1)?24:16;
+					//Don't display scoring information if matches up with following
+					if (!(curopt==3 && gameopt.time_trial)) {
+						
+						gfx_SetTextFGColor(FONT_GOLD);
+						gfx_PrintStringXY("best ",x,y);
+						if (curopt&1) s = "time";
+						else          s = "score";
+						gfx_PrintString(s);
+						y+=16;
+						s = (char*) getScorePtr(&gameopt);
+						if (gameopt.players == DOUBLES) {
+							tx = x+16;
+						} else {
+							tx = x;
+						}
+						gfx_PrintStringXY(s+4,tx,y);
+						y+=16;
+						gfx_PrintStringXY("by.",x,y);
+						y+=16;
+						if (gameopt.players == DOUBLES) {
+							gfx_PrintStringXY(s+0,x,y);
+							gfx_PrintStringXY(" & ",x+32,y);
+							gfx_PrintString(s+4+10);
+						} else {
+							gfx_PrintStringXY(s+0,x+32,y);
+						}
+					}
+					x = oldx;
+				}
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_ARCADEOPTIONS:
+				initGameState(arcopt);
+				runGame(arcopt);
+				gamestate = GM_LOADINGTITLE;
+				continue;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_OPTIONS:
+				return;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			default:
+				return;
+				
+		}
+		gfx_SwapDraw();
+	}
+}
+
+
+void drawTitleGFX(void *titleptr) {
+	dzx7_Turbo(titleptr,gfx_vbuffer);
+	gfx_RLETSprite(titlebanner,48,16);
+	gfx_SwapDraw();
+}
+
+void *selectNewTitle(void) {
+	if (randInt(0,1)) return title1_compressed;
+	else return title2_compressed;
+}
+
+void drawMenuBG(void) {
+	uint8_t i;
+	int x,y;  //Can't cast y as uint8_t due to bounds check at end
+	
+	//Draw top and bottom black borders
+	gfx_SetColor(BG_BLACK);
+	gfx_FillRectangle_NoClip(0,0,320,8);
+	gfx_FillRectangle_NoClip(0,232,320,8);
+	//Draw horizontal image border frames
+	for(y=8;y<232;y+=72) {
+		for(x=0;x<320;x+=8) {
+			gfx_Sprite_NoClip(menuborder,x,y);
+		}
+	}
+	//Draw menu fill tiles/sprites
+	for(y=16;y<232;y+=72) {
+		for(x=0;x<320;x+=80) {
+			gfx_Sprite_NoClip(menutile,x,y);
+		}
+	}
+}
+
+//use:          dx,y,i.j,curopt
+void dispCursor(x,y,yidx,xidx,prevcursor) {
+	if (*gamecursorx1[yidx] == xidx && !(gamecursory1==yidx && main_timer&2)) {
+		if (yidx<2) gfx_RLETSprite_NoClip(p1sprite,x,y-8);
+		else        gfx_RLETSprite_NoClip(downarrow,x,y-8);
+	}
+	if (prevcursor!=2 && prevcursor !=3) return;
+	if (*gamecursorx2[yidx] == xidx && !(gamecursory2==yidx && main_timer&2)) {
+		gfx_RLETSprite_NoClip(p2sprite,x,y+8);
+	}
+}
+
+void *getScorePtr(options_t *options) {
+	uint8_t idx;
+	if (options->type == TYPE_ARCADE) return &save.score1pa;
+	idx = 0;
+	if (options->time_trial) idx = 1;
+	if (options->type == TYPE_FLASH) idx = 2;
+	return (options->players == DOUBLES) ? &save.score1pd[idx] : &save.score1pd[idx];
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

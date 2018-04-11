@@ -5,7 +5,8 @@
 #include <graphx.h>
 
 extern enum GameState {
-	GM_TITLE=0,
+	GM_LOADINGTITLE=0,
+	GM_TITLE,
 	GM_MAINMENU,
 	GM_ARCADEOPTIONS,
 	GM_GAMEMENU,GM_GAMEOPTIONS,GM_GAMEPREVIEW,
@@ -92,6 +93,16 @@ typedef struct arcscore_t {
 	char jewels[5];   //4 ch jewels (max 9999), 0-term
 	char level[4];    //3 ch levels (theoretical max 285), 0-term
 } arcscore_t;
+
+//Save file structure. Used only in one place: save
+typedef struct savefile_t {
+	uint8_t version;
+	score_t score1ps[3];    //orig 1p, orig 1p TT, flash 1p. 2p local == 1p.
+	dblscore_t score1pd[3]; //orig db, orig db TT, flash db. best always local.
+	arcscore_t score1pa[9]; //9 scores, sorted by highest score.
+	options_t arcopt;
+	options_t gameopt;
+} savefile_t;
 
 
 
