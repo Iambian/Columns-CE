@@ -37,6 +37,7 @@
 #define MOVESIDE_TIMEOUT 5
 #define DESTRUCT_TIMEOUT 38
 #define SCOREFALL_TIMEOUT 50
+#define ONE_SECOND 64
 
 //Grid buffer masking information
 #define CHANGE_BUF1 (1<<7)

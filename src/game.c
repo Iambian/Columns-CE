@@ -154,6 +154,7 @@ uint8_t posarr[2][2][2][8][3]= {
 void initGameState(options_t *opt);
 void runGame(options_t *options);  //Starts the game session
 
+/* ----------------------- Function prototypes goes here ---------------------*/
 
 
 
@@ -757,9 +758,13 @@ void runGame(options_t *options) {
 	uint8_t score_active,score_countdown;
 	uint8_t matches_found;
 	uint8_t palette_offset;
-	int tempscore,x,y,templevel;
+	int tempscore,x,y,templevel,gos_y;
+	gfx_rletsprite_t *rsptr;
+	
+	
 	moveside_delay = MOVESIDE_TIMEOUT;
 	menu_active = flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
+	gos_y  = 0;
 	//Generate game static background
 	
 	if (options->type == TYPE_ARCADE) {
@@ -933,9 +938,12 @@ void runGame(options_t *options) {
 				for (i=t=0; i<GRID_START; ++i) {
 					if (player1.grid[i] != GRID_EMPTY) t = 1;
 				}
-				if (t) {
+				if (t) { /* @@@@@@@@@@@@@@@@@@ GAME OVER @@@@@@@@@@@@@@@@@@@ */
 					player1.state = GM_GAMEOVER;
 					player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
+					player1.subsecond = ONE_SECOND;
+					player1.secondsleft = 5;
+					gos_y = 72+208+16;
 					continue;
 				}
 				
@@ -1063,13 +1071,48 @@ void runGame(options_t *options) {
 			
 			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_GAMEOVER) {
-			if (player1.triad_idx==255) break;  //nothing after anim. Kill rtn.
-			if (main_timer&1) {  //Cycle every other frame
+			refreshgrid(&player1);
+			
+			redrawboard(options);
+			if (!(main_timer&3) && player1.triad_idx < 240) {
 				for(i=0;i<6;++i,player1.triad_idx--) {
 					player1.grid[player1.triad_idx] = GRID_EXP1;
 					player1.cgrid[player1.triad_idx] = CHANGE_BUF1|CHANGE_BUF2;
 				}
 			}
+			x = player1.grid_left;
+			y = player1.grid_top;
+			gfx_SetClipRegion(x,y,x+96,y+208);
+			
+			if (!--player1.subsecond) {
+				player1.subsecond = ONE_SECOND;
+				if (!--player1.secondsleft) {
+					//Check if player1 is able to enter their name in.
+					//Else skip to GM_GAMEWAITING
+					gfx_SetClipRegion(0,0,LCD_WIDTH,LCD_HEIGHT); return;
+					//DEBUG END
+					player1.state = GM_GAMEWAITING;
+				}
+			}
+			if (gos_y>(72+player1.grid_top)) gos_y-=4;
+			
+			if (options->type == TYPE_FLASH && player1.victory) {
+				//You've done it
+				
+				
+			} else {
+				//Game over
+				for(i=0;i<8;i++) {
+					x   = gameoverpos[i]+player1.grid_left;
+					t   = (((main_timer>>3)-i)&2)==2;
+					rsptr = gameoverspr[i][t];
+					gfx_RLETSprite(rsptr,x,gos_y);
+				}
+			}
+			gfx_SetClipRegion(0,0,LCD_WIDTH,LCD_HEIGHT);
+			gfx_SwapDraw();
+			++main_timer;
+			continue;
 		} else break; //Illegal value - stop playing the game
 		++main_timer;
 		dbg_sprintf(dbgout,"State %i, cur timer %i, stay timer %i, index %i\n",player1.state,player1.cur_delay,player1.stay_delay,player1.triad_idx);

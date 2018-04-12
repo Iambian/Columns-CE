@@ -144,7 +144,8 @@ void decompAndVaryChars(uint8_t ch, gfx_rletsprite_t **v) {
 	dzx7_Turbo(chars[ch],baseimg);
 	i = baseimg[0]*baseimg[1];
 	v[0] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
-	for (ptr=baseimg+2; i; i--)  if (ptr[0]==8||ptr[0]==9) ptr[0]+=2;
+	dzx7_Turbo(chars[ch],baseimg);
+	for (ptr=baseimg+2; i; ptr++,i--)  if ((ptr[0]==8)||(ptr[0]==9)) ptr[0]+=2;
 	v[1] = gfx_ConvertMallocRLETSprite((gfx_sprite_t*)baseimg);
 }
 

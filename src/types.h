@@ -10,7 +10,8 @@ extern enum GameState {
 	GM_MAINMENU,
 	GM_ARCADEOPTIONS,
 	GM_GAMEMENU,GM_GAMEOPTIONS,GM_GAMEPREVIEW,
-	GM_PLAYSTART,GM_PLAYSTART2,GM_PLAYMATCH,GM_PLAYMOVE,GM_GAMEOVER,
+	GM_PLAYSTART,GM_PLAYSTART2,GM_PLAYMATCH,GM_PLAYMOVE,
+	GM_GAMEOVER,GM_NAMEENTRY,GM_GAMEWAITING,GM_GAMEPAUSED,
 	GM_OPTIONS,GM_GOTOMAIN
 };
 extern enum GameType {
@@ -54,6 +55,7 @@ typedef struct entity_t {
 	uint8_t secondsleft;   // For menu timing
 	uint8_t menuoption;    // Current menu option
 	uint8_t baselevel;     //this plus level based on jewels destroyed
+	uint8_t victory;       //1 if victory has been achieved.
 	
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
