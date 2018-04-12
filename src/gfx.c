@@ -94,7 +94,7 @@ uint8_t youdiditchr[13]=
 };
 
 uint8_t gameoverpos[8] = {6,16,26,36,54,64,74,85};
-uint8_t youdiditpos[13]= {21,30,41,50,97,70,12,22,33,42,59,67,79};
+uint8_t youdiditpos[13]= {21,30,41,50,60,70,12,22,33,42,59,67,79};
 
 
 /* ----------------------- Function prototypes goes here ---------------------*/

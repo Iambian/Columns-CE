@@ -942,7 +942,7 @@ void runGame(options_t *options) {
 					player1.state = GM_GAMEOVER;
 					player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
 					player1.subsecond = ONE_SECOND;
-					player1.secondsleft = 5;
+					player1.secondsleft = 2;
 					gos_y = 72+208+16;
 					continue;
 				}
@@ -1098,8 +1098,13 @@ void runGame(options_t *options) {
 			
 			if (options->type == TYPE_FLASH && player1.victory) {
 				//You've done it
-				
-				
+				for(i=0,y=0;i<13;i++) {
+					x   = youdiditpos[i]+player1.grid_left;
+					t   = (((main_timer>>3)-i)&2)==2;
+					if (i==6) y = 16;
+					rsptr = youdiditspr[i][t];
+					gfx_RLETSprite(rsptr,x,gos_y+y);
+				}
 			} else {
 				//Game over
 				for(i=0;i<8;i++) {
