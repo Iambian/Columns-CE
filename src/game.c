@@ -1072,7 +1072,6 @@ void runGame(options_t *options) {
 			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_GAMEOVER) {
 			refreshgrid(&player1);
-			
 			redrawboard(options);
 			if (!(main_timer&3) && player1.triad_idx < 240) {
 				for(i=0;i<6;++i,player1.triad_idx--) {
@@ -1087,11 +1086,14 @@ void runGame(options_t *options) {
 			if (!--player1.subsecond) {
 				player1.subsecond = ONE_SECOND;
 				if (!--player1.secondsleft) {
-					//Check if player1 is able to enter their name in.
-					//Else skip to GM_GAMEWAITING
-					gfx_SetClipRegion(0,0,LCD_WIDTH,LCD_HEIGHT); return;
-					//DEBUG END
-					player1.state = GM_GAMEWAITING;
+					//DEBUG: FORCED CONDITION ON IF STATEMENT
+					if (0) { //if high score has been achieved
+						player1.secondsleft = 31;
+						player1.state = GM_NAMEENTRY;
+					} else {
+						player1.secondsleft = 5;
+						player1.state = GM_GAMEWAITING;
+					}
 				}
 			}
 			if (gos_y>(72+player1.grid_top)) gos_y-=4;
@@ -1115,6 +1117,49 @@ void runGame(options_t *options) {
 				}
 			}
 			gfx_SetClipRegion(0,0,LCD_WIDTH,LCD_HEIGHT);
+			gfx_SwapDraw();
+			++main_timer;
+			continue;
+		} else if (player1.state == GM_NAMEENTRY) {
+			
+			
+			
+			
+			
+			break;
+		} else if (player1.state == GM_GAMEWAITING) {
+			refreshgrid(&player1);
+			redrawboard(options);
+			//if (kc&kb_Mode) return;
+			if (kc&kb_2nd) {
+				//Only if the player has credits...
+				//... not. This isn't an arcade machine!
+				initGameState(options);
+				player1.updating = UPDATE_SCORE|UPDATE_LEVEL|UPDATE_JEWELS;
+				continue;
+			}
+			if (!--player1.subsecond) {
+				player1.subsecond = ONE_SECOND;
+				if (!--player1.secondsleft) {
+					return;
+				}
+			}
+			//Game over scroller - more permanent.
+			for(i=0;i<8;i++) {
+				x   = gameoverpos[i]+player1.grid_left;
+				t   = (((main_timer>>3)-i)&2)==2;
+				rsptr = gameoverspr[i][t];
+				gfx_RLETSprite(rsptr,x,player1.grid_top+72);
+			}
+			x = player1.grid_left;
+			y = player1.grid_top;
+			gfx_SetTextFGColor(FONT_GOLD);
+			gfx_SetTextBGColor(BG_TRANSPARENT);
+			if (main_timer&32) {
+				gfx_PrintStringXY("press",x+24,y+96);
+				gfx_PrintStringXY("2nd button",x+8,y+112);
+			}
+			
 			gfx_SwapDraw();
 			++main_timer;
 			continue;

@@ -336,6 +336,8 @@ void main_menu_loop(void) {
 					//Start the game...
 					initGameState(&gameopt);
 					runGame(&gameopt);
+					gamestate = GM_LOADINGTITLE;
+					continue;
 				}
 				drawMenuBG();
 				//Draw menu text
