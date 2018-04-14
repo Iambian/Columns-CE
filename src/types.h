@@ -56,6 +56,8 @@ typedef struct entity_t {
 	uint8_t menuoption;    // Current menu option
 	uint8_t baselevel;     //this plus level based on jewels destroyed
 	uint8_t victory;       //1 if victory has been achieved.
+	uint8_t curletter;     //The current letter/sym to be displayed in name entry
+	uint8_t namebuffer[4]; //Zero-terimated buffer storing current name
 	
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.

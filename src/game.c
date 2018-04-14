@@ -47,6 +47,20 @@ uint16_t num3[] = {25096,30464,30621,30621}; //Combo x4
 uint16_t num4[] = {20608,29952,30476,30621}; //Combo x5
 uint16_t num5[] = {12288,29828,30224,30621}; //Combo x6
 
+#define NEN_PREV 0x1D
+#define NEN_END 0x1E
+#define NEN_NEXT 0x1F
+char nentrydisp[] = {
+	//0 1   2   3   4    5   6   7  8   9   A   b   c   d   e    f
+	' ','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
+	'P','Q','R','S','T','U','V','W','X','Y','Z','?','.','<','=','>'
+};
+char nentrymap[] = {
+	' ','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o',
+	'p','q','r','s','t','u','v','w','x','y','z','?','.','!','!','!'
+};
+
+
 uint16_t *numpal[] = {
 	num0,num1,num2,num3,num4,num5
 };
@@ -790,7 +804,7 @@ void runGame(options_t *options) {
 		kc = kb_Data[1];
 		kd = kb_Data[7];
 		
-		if (kc&kb_Mode) { return; } //For now, exit game immediately
+		if (kc&kb_Mode && player1.state != GM_NAMEENTRY) return;
 		//Left/right debouncing no matter the mode
 		if (kd&(kb_Left|kb_Right)) {
 			if (moveside_active) {
@@ -1087,9 +1101,12 @@ void runGame(options_t *options) {
 				player1.subsecond = ONE_SECOND;
 				if (!--player1.secondsleft) {
 					//DEBUG: FORCED CONDITION ON IF STATEMENT
-					if (0) { //if high score has been achieved
+					if (1) { //if high score has been achieved
 						player1.secondsleft = 31;
 						player1.state = GM_NAMEENTRY;
+						player1.menuoption = 0;
+						player1.curletter = 0;
+						memset(&player1.namebuffer,'-',3);
 					} else {
 						player1.secondsleft = 5;
 						player1.state = GM_GAMEWAITING;
@@ -1121,12 +1138,77 @@ void runGame(options_t *options) {
 			++main_timer;
 			continue;
 		} else if (player1.state == GM_NAMEENTRY) {
+			refreshgrid(&player1);
+			redrawboard(options);
+			//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+			if (kc&kb_Mode) {                         //$$$$
+				//DEBUG: IMMEDIATE QUIT               //$$$$
+				while (kb_AnyKey());                  //$$$$
+				player1.state = GM_GAMEWAITING;       //$$$$
+				player1.secondsleft = 5;              //$$$$
+			}                                         //$$$$
+			//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+			if (kc&kb_2nd) {
+				if (player1.curletter == NEN_PREV && player1.menuoption>0)
+					player1.menuoption--;
+				else if (player1.curletter == NEN_NEXT && player1.menuoption<3)
+					player1.menuoption++;
+				else if (player1.curletter == NEN_END) {
+					player1.subsecond = player1.secondsleft = 1;
+				} else if (player1.curletter<NEN_PREV && player1.menuoption<3) {
+					player1.namebuffer[player1.menuoption] = nentrymap[player1.curletter];
+					player1.menuoption++;
+				}
+				if (player1.menuoption >= 3 && player1.curletter<NEN_PREV)
+					player1.curletter = NEN_END;
+			}
+			if (kd&kb_Up) {
+				player1.curletter = (player1.curletter+1)&0x1F;
+				if (player1.menuoption==3 && player1.curletter<NEN_PREV) player1.curletter = NEN_PREV;
+			}
+			if (kd&kb_Down) {
+				player1.curletter = (player1.curletter-1)&0x1F;
+				if (player1.menuoption==3 && player1.curletter<NEN_PREV) player1.curletter = NEN_NEXT;
+			}
 			
+			x = player1.grid_left+8;
+			y = player1.grid_top+72;
+			gfx_SetTextFGColor(FONT_GOLD);
+			gfx_SetTextBGColor(BG_TRANSPARENT);
+			gfx_PrintStringXY("very good!",x,y);
+			gfx_SetTextXY(x+24,y+24);
 			
+			for (i=0;i<4;i++) {
+				t = player1.namebuffer[i];
+				if (i<3 && i!=player1.menuoption) {
+					gfx_PrintChar(t);
+				}
+				if (i==player1.menuoption) {
+					//More conditions and things. If left alone, revert to blink
+					//cursor. To implement later.
+					gfx_SetTextFGColor(FONT_WHITE);
+					gfx_PrintChar(nentrydisp[player1.curletter]);
+					gfx_SetTextFGColor(FONT_GOLD);
+				}
+			}
 			
+			x = player1.grid_left+24;
+			y = player1.grid_top+152;
+			gfx_PrintStringXY("time ",x,y);
+			gfx_PrintUInt(player1.secondsleft-1,2);
 			
+			if (!--player1.subsecond) {
+				player1.subsecond = ONE_SECOND;
+				if (!--player1.secondsleft) {
+					player1.state = GM_GAMEWAITING;
+					player1.secondsleft = 5;
+					return;
+				}
+			}
 			
-			break;
+			gfx_SwapDraw();
+			++main_timer;
+			continue;
 		} else if (player1.state == GM_GAMEWAITING) {
 			refreshgrid(&player1);
 			redrawboard(options);
