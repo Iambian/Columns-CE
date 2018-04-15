@@ -1106,6 +1106,7 @@ void runGame(options_t *options) {
 						player1.state = GM_NAMEENTRY;
 						player1.menuoption = 0;
 						player1.curletter = 0;
+						player1.secondsleft2 = 0;
 						memset(&player1.namebuffer,'-',3);
 					} else {
 						player1.secondsleft = 5;
@@ -1148,6 +1149,7 @@ void runGame(options_t *options) {
 				player1.secondsleft = 5;              //$$$$
 			}                                         //$$$$
 			//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+			if (kc|kd) player1.secondsleft2 = 3;
 			if (kc&kb_2nd) {
 				if (player1.curletter == NEN_PREV && player1.menuoption>0)
 					player1.menuoption--;
@@ -1176,7 +1178,7 @@ void runGame(options_t *options) {
 			gfx_SetTextFGColor(FONT_GOLD);
 			gfx_SetTextBGColor(BG_TRANSPARENT);
 			gfx_PrintStringXY("very good!",x,y);
-			gfx_SetTextXY(x+24,y+24);
+			gfx_SetTextXY(x+24,y+24+24);
 			
 			for (i=0;i<4;i++) {
 				t = player1.namebuffer[i];
@@ -1184,11 +1186,13 @@ void runGame(options_t *options) {
 					gfx_PrintChar(t);
 				}
 				if (i==player1.menuoption) {
-					//More conditions and things. If left alone, revert to blink
-					//cursor. To implement later.
-					gfx_SetTextFGColor(FONT_WHITE);
-					gfx_PrintChar(nentrydisp[player1.curletter]);
-					gfx_SetTextFGColor(FONT_GOLD);
+					if (!player1.secondsleft2 && main_timer&32 && i<3) {
+						gfx_PrintChar(t);
+					} else {
+						gfx_SetTextFGColor(FONT_WHITE);
+						gfx_PrintChar(nentrydisp[player1.curletter]);
+						gfx_SetTextFGColor(FONT_GOLD);
+					}
 				}
 			}
 			
@@ -1199,10 +1203,10 @@ void runGame(options_t *options) {
 			
 			if (!--player1.subsecond) {
 				player1.subsecond = ONE_SECOND;
+				if (player1.secondsleft2) --player1.secondsleft2;
 				if (!--player1.secondsleft) {
 					player1.state = GM_GAMEWAITING;
 					player1.secondsleft = 5;
-					return;
 				}
 			}
 			
