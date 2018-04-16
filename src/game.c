@@ -759,7 +759,7 @@ void initGameState(options_t *opt) {
 //##############################################################################
 
 void runGame(options_t *options) {
-	uint8_t i,t,idx;
+	uint8_t i,t,tp,idx;
 	uint8_t moveside_active,moveside_delay;
 	uint8_t shuffle_active;
 	uint8_t menu_active;
@@ -1107,6 +1107,7 @@ void runGame(options_t *options) {
 						player1.menuoption = 0;
 						player1.curletter = 0;
 						player1.secondsleft2 = 0;
+						player1.cur_delay = 0;
 						memset(&player1.namebuffer,'-',3);
 					} else {
 						player1.secondsleft = 5;
@@ -1138,6 +1139,7 @@ void runGame(options_t *options) {
 			gfx_SwapDraw();
 			++main_timer;
 			continue;
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_NAMEENTRY) {
 			refreshgrid(&player1);
 			redrawboard(options);
@@ -1167,10 +1169,14 @@ void runGame(options_t *options) {
 			if (kd&kb_Up) {
 				player1.curletter = (player1.curletter+1)&0x1F;
 				if (player1.menuoption==3 && player1.curletter<NEN_PREV) player1.curletter = NEN_PREV;
+				player1.cur_delay = 4;
+				player1.sdir = DIR_UP;
 			}
 			if (kd&kb_Down) {
 				player1.curletter = (player1.curletter-1)&0x1F;
 				if (player1.menuoption==3 && player1.curletter<NEN_PREV) player1.curletter = NEN_NEXT;
+				player1.cur_delay = 4;
+				player1.sdir = DIR_DOWN;
 			}
 			
 			x = player1.grid_left+8;
@@ -1178,19 +1184,44 @@ void runGame(options_t *options) {
 			gfx_SetTextFGColor(FONT_GOLD);
 			gfx_SetTextBGColor(BG_TRANSPARENT);
 			gfx_PrintStringXY("very good!",x,y);
-			gfx_SetTextXY(x+24,y+24+24);
+			x += 24;
+			y += 24+24;
+			gfx_SetTextXY(x,y);
 			
-			for (i=0;i<4;i++) {
+			for (i=0;i<4;i++,x+=8) {
 				t = player1.namebuffer[i];
+				gfx_SetTextXY(x,y);
 				if (i<3 && i!=player1.menuoption) {
 					gfx_PrintChar(t);
 				}
+				
 				if (i==player1.menuoption) {
 					if (!player1.secondsleft2 && main_timer&32 && i<3) {
 						gfx_PrintChar(t);
 					} else {
+						tp = nentrydisp[player1.curletter];
 						gfx_SetTextFGColor(FONT_WHITE);
-						gfx_PrintChar(nentrydisp[player1.curletter]);
+						if (player1.cur_delay) {
+							--player1.cur_delay;
+							gfx_SetClipRegion(x,y,x+8,y+8);
+							gfx_SetTextConfig(gfx_text_clip);
+							if (player1.sdir == DIR_DOWN) {
+								gfx_SetTextXY(x,y+(player1.cur_delay<<1));
+								gfx_PrintChar(tp);
+								gfx_SetTextXY(x,y-((4-player1.cur_delay)<<1));
+								gfx_PrintChar(nentrydisp[(player1.curletter+1)&0x1F]);
+							} else {
+								gfx_SetTextXY(x,y+((4-player1.cur_delay)<<1));
+								gfx_PrintChar(nentrydisp[(player1.curletter-1)&0x1F]);
+								gfx_SetTextXY(x,y-(player1.cur_delay<<1));
+								gfx_PrintChar(tp);
+							}
+							gfx_SetTextXY(x,y);
+							gfx_SetTextConfig(gfx_text_noclip);
+							gfx_SetClipRegion(0,0,320,240);
+						} else {
+							gfx_PrintChar(tp);
+						}
 						gfx_SetTextFGColor(FONT_GOLD);
 					}
 				}
@@ -1200,6 +1231,7 @@ void runGame(options_t *options) {
 			y = player1.grid_top+152;
 			gfx_PrintStringXY("time ",x,y);
 			gfx_PrintUInt(player1.secondsleft-1,2);
+			
 			
 			if (!--player1.subsecond) {
 				player1.subsecond = ONE_SECOND;
@@ -1213,6 +1245,7 @@ void runGame(options_t *options) {
 			gfx_SwapDraw();
 			++main_timer;
 			continue;
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_GAMEWAITING) {
 			refreshgrid(&player1);
 			redrawboard(options);

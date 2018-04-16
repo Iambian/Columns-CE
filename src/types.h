@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <graphx.h>
 
+extern enum ScrollDir { DIR_DOWN=0, DIR_UP};
+
 extern enum GameState {
 	GM_LOADINGTITLE=0,
 	GM_TITLE,
@@ -59,6 +61,7 @@ typedef struct entity_t {
 	uint8_t curletter;     //The current letter/sym to be displayed in name entry
 	uint8_t namebuffer[4]; //Zero-terimated buffer storing current name
 	uint8_t secondsleft2;  //Second timer, used in name entry input timeout
+	enum ScrollDir sdir;
 	
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.
