@@ -18,27 +18,27 @@ Building the Game From Source
   command-line without any parameters. This will build all the graphics.
 * Run `make` from the project's root directory to build the project.
 * If all is successful, a `bin` folder should have appeared with at least one
-  file named `COLUMNCE.8xp` in it. This is file you want to send to your
+  file named `COLUMNCE.8xp` in it. This is the file you want to send to your
   calculator.
   
 Running the Game
 ----------------
 * Send `COLUMNCE.8xp` to your TI-84 CE graphing calculator by using your
-  favorite computer-to-calculator link software (e.g. TiLP, Ti-Connect CE).
+  favorite computer-to-calculator link software (e.g. TiLP, TI-Connect CE).
 * If you do not have the 'Standard' CE libraries (`GRAPHX`, `FILEIOC`, etc.),
   you should download them from
-  https://github.com/CE-Programming/libraries/releases and also send them to
+  https://tiny.cc/clibs and also send them to
   your calculator.
 * Run the program...
   * ...by using your favorite shell software (e.g. DoorsCE9, Cesium, etc.)
     * Follow the instructions provided by that software on how to run Columns CE.
   * ...by invoking it on the homescreen as an ASM program. To do this:
     * `CLEAR` the homescreen
-	* Bring up the catalog by pushing `[2nd]`, then `[0]`
-	* Arrow down until you select `Asm(`, then push `[ENTER]`
-	* Push `[PRGM]` and (if needed) scroll down until you select `COLUMNCE`,
-	  then push `[ENTER]`
-	* You should see on the homescreen `Asm(prgmCOLUMNCE`. Push `[ENTER]` to run.
+	* Bring up the catalog by pushing <kbd>2nd</kbd>, then <kbd>0</kbd>
+	* Arrow down until you select `Asm(`, then push <kbd>enter</kbd>
+	* Push <kbd>prgm</kbd> and (if needed) scroll down until you select `COLUMNCE`,
+	  then push <kbd>enter</kbd>
+	* You should see on the homescreen `Asm(prgmCOLUMNCE`. Push <kbd>enter</kbd> to run.
 	
 Troubleshooting
 ---------------
@@ -50,18 +50,18 @@ In the menu:
 
 | Keys     |  Function         |
 |---------:|:------------------|
-|[Mode]    | Go back/Quit      |
-|[2nd]     | Select option     |
+|<kbd>mode</kbd>    | Go back/Quit      |
+|<kbd>2nd</kbd>     | Select option     |
 |Arrow keys| Change menu option|
 
 During gameplay:
 
 | Keys       |  Function                |
 |-----------:|:-------------------------|
-|[Mode]      | Forfeit/Quit             |
-|[2nd]       | Shift the jewels         |
-|[Left/Right]| Move jewels left or right|
-|[Down]      | Quickly drop the jewels  |
+|<kbd>mode</kbd>      | Forfeit/Quit             |
+|<kbd>2nd</kbd>       | Shift the jewels         |
+|<kbd><</kbd>/<kbd>></kbd>| Move jewels left or right|
+|<kbd>v</kbd>      | Quickly drop the jewels  |
 
 License and Copyright
 ---------------------
