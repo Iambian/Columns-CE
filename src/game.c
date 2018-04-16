@@ -15,6 +15,7 @@
 #include "defs.h"
 #include "types.h"
 #include "main.h"
+#include "menu.h"
 #include "gfx.h"
 
 
@@ -752,6 +753,44 @@ void initGameState(options_t *opt) {
 	//Initialize triad
 	gentriad(&player1);
 }
+
+
+
+uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
+	uint8_t iold,icur;
+	uint8_t oldtemp;
+	uint8_t newgt;
+	
+	newgt=0;
+	//old is B-E chr start at +0, cur is L-E uint8 start at +(isFlash)?4:7
+	for (iold=0,icur=(opt->type==TYPE_FLASH)?4:7; icur!=255; ++iold,--icur) {
+		if (oldscore[iold]==':') continue; //Skip test of semicolon object.
+		oldtemp = (uint8_t) ((oldscore[iold]==' ')? 0 : oldscore[iold]-'0');
+		if (curscore[icur]>oldtemp) {
+			newgt = 1;
+			break;
+		}
+	}
+	return newgt;
+}
+
+//Returns rank 1-9 on arcade mode, or just 1 if you made a high score, else 0.
+uint8_t scoreCmp(options_t *opt) {
+	uint8_t i,t;
+	
+	if (opt->type = TYPE_ARCADE) {
+		for (i=0;i<10;i++) {
+			if (scoreCmpSub(opt,&((char*)&save.score1pa[i])[4],&player1.score)) {
+				return i+1;
+			}
+		}
+		return 0;
+	} else {
+		return scoreCmpSub(opt,((char*)getScorePtr(opt))+4,&player1.score);
+	}
+}
+
+
 
 //##############################################################################
 //##############################################################################

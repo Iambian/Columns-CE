@@ -15,6 +15,7 @@
 #include "defs.h"
 #include "types.h"
 #include "main.h"
+#include "menu.h"
 #include "gfx.h"
 #include "game.h"
 
