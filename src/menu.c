@@ -505,7 +505,11 @@ void *getScorePtr(options_t *options) {
 	idx = 0;
 	if (options->time_trial) idx = 1;
 	if (options->type == TYPE_FLASH) idx = 2;
-	return (options->players == DOUBLES) ? &save.score1pd[idx] : &save.score1pd[idx];
+	if (options->players == DOUBLES) {
+		return &save.score1pd[idx];
+	} else {
+		return &save.score1ps[idx];
+	}
 }
 
 
