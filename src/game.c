@@ -472,7 +472,7 @@ void drawscore(entity_t *e, options_t *opt) {
 				printuint(e->level+e->baselevel,x,y,3);
 			} else if (i == SOBJ_JEWELSSUB && (e->updating&UPDATE_JEWELS)) {
 				//Print jewels/class
-				dbg_sprintf(dbgout,"Updating jewels: %i\n",e->jewels);
+				//dbg_sprintf(dbgout,"Updating jewels: %i\n",e->jewels);
 				if (isflash) {
 					switch (e->max_types) {
 						case NOVICE: s = "NOV"; break;
@@ -664,7 +664,7 @@ uint8_t gridmatch(entity_t *e) {
 	for(matches=i=0; i<GRID_SIZE; ++i) {
 		if (e->cgrid[i]&TILE_FLASHING) ++matches;
 	}
-	dbg_sprintf(dbgout,"Matches found: %i\n",matches);
+	//dbg_sprintf(dbgout,"Matches found: %i\n",matches);
 	return matches;
 }
 
@@ -765,7 +765,11 @@ uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
 	//old is B-E chr start at +0, cur is L-E uint8 start at +(isFlash)?4:7
 	for (iold=0,icur=(opt->type==TYPE_FLASH)?4:7; icur!=255; ++iold,--icur) {
 		if (oldscore[iold]==':') continue; //Skip test of semicolon object.
-		oldtemp = (uint8_t) ((oldscore[iold]==' ')? 0 : oldscore[iold]-'0');
+		if (oldscore[iold] == 0) {
+			oldtemp = 0;
+		} else {
+			oldtemp = (uint8_t) ((oldscore[iold]==' ')? 0 : oldscore[iold]-'0');
+		}
 		if (curscore[icur]>oldtemp) {
 			newgt = 1;
 			break;
@@ -778,7 +782,7 @@ uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
 uint8_t scoreCmp(options_t *opt) {
 	uint8_t i,t;
 	
-	if (opt->type = TYPE_ARCADE) {
+	if (opt->type == TYPE_ARCADE) {
 		for (i=0;i<10;i++) {
 			if (scoreCmpSub(opt,&((char*)&save.score1pa[i])[4],&player1.score)) {
 				return i+1;
@@ -790,6 +794,26 @@ uint8_t scoreCmp(options_t *opt) {
 	}
 }
 
+//For use in doubles as well
+void saveName(uint8_t *dest) {
+	uint8_t i,t;
+	for (i=0;i<3;++i,++dest) {
+		t = player1.namebuffer[i];
+		if (t=='-') t=' ';
+		*dest = t;
+	}
+	*dest = 0;  //null-terminate
+}
+
+void saveScore(options_t *opt, uint8_t *dest) {
+	uint8_t i,t;
+	saveName(dest);
+	dest += 4;
+	memset(dest,0,10);  //Clear score field and sets null terminator
+	for (i=(opt->type==TYPE_FLASH)?4:7; i!=255; --i,++dest) {
+		*dest = player1.score[i];
+	}
+}
 
 
 //##############################################################################
@@ -1139,8 +1163,8 @@ void runGame(options_t *options) {
 			if (!--player1.subsecond) {
 				player1.subsecond = ONE_SECOND;
 				if (!--player1.secondsleft) {
-					//DEBUG: FORCED CONDITION ON IF STATEMENT
-					if (1) { //if high score has been achieved
+					if (player1.arcaderank = scoreCmp(options)) {
+						//if high score has been achieved
 						player1.secondsleft = 31;
 						player1.state = GM_NAMEENTRY;
 						player1.menuoption = 0;
@@ -1182,14 +1206,6 @@ void runGame(options_t *options) {
 		} else if (player1.state == GM_NAMEENTRY) {
 			refreshgrid(&player1);
 			redrawboard(options);
-			//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-			if (kc&kb_Mode) {                         //$$$$
-				//DEBUG: IMMEDIATE QUIT               //$$$$
-				while (kb_AnyKey());                  //$$$$
-				player1.state = GM_GAMEWAITING;       //$$$$
-				player1.secondsleft = 5;              //$$$$
-			}                                         //$$$$
-			//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 			if (kc|kd) player1.secondsleft2 = 3;
 			if (kc&kb_2nd) {
 				if (player1.curletter == NEN_PREV && player1.menuoption>0)
@@ -1276,6 +1292,20 @@ void runGame(options_t *options) {
 				player1.subsecond = ONE_SECOND;
 				if (player1.secondsleft2) --player1.secondsleft2;
 				if (!--player1.secondsleft) {
+					if (options->type == TYPE_ARCADE) {
+						
+						
+						
+					} else {
+						ptr = (uint8_t*) getScorePtr(options);
+						saveScore(options,ptr);
+						if (options->players == DOUBLES) {
+							//DEBUG: DUMMY DOUBLES ENTRY - REPLICATE P1
+							//TODO:  WAIT ON P2 AND RETRIEVE NAME VIA LINK
+							strcpy((char*)&player1.namebuffer,"DBG");
+							saveName(ptr+4+10);
+						}
+					}
 					player1.state = GM_GAMEWAITING;
 					player1.secondsleft = 5;
 				}
