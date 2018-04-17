@@ -385,16 +385,54 @@ void drawscore(entity_t *e, options_t *opt) {
 	numsprite_t *num;
 	uint8_t isflash,isdual,imgid;
 	char *s;
+	gfx_rletsprite_t *rspr;
+	uint16_t *palptr;
 	
 	
-	//ONLY IN NON-FLASH MODE.
-	//TODO: FLASH MODE TIMER, COMBO COLORS FOR SCORE MODE
-	if (e->scorefallthrough) {
+	
+	if (opt->type == TYPE_FLASH || ( opt->time_trial && opt->type != TYPE_FLASH)
+		&& (e->state > GM_PLAYSTART2)) {
+		//Select X
+		if (player1.playerid == PLAYER1) {
+			if (opt->players == PLAYER2 || opt->type == TYPE_ARCADE) {
+				x = 120;  //player 1 in 2P split screen mode
+			} else {
+				x = 64;   //Player 1 in 1P or doubles single column
+			}
+		} else {
+			if (opt->players == PLAYER2 || opt->type == TYPE_ARCADE) {
+				x = 160;
+			} else {
+				x = 216;
+			}
+		}
+		//Select Y
+		y = 95;
+		if (e->playerid == PLAYER1 && 
+			(opt->players == PLAYER2 || opt->type == TYPE_ARCADE)) y = 71;
+		//Select number color
+		t = (e->playerid == PLAYER1) ? 16 : 24;
+		if (opt->time_trial && e->secondsleft < 59) palptr = num5;
+		else                                        palptr = num0;
+		gfx_SetPalette(palptr,8,PALSWAP_AREA + t);
+		//Begin rendering
+		gfx_FillRectangle(x,y,40,16);
+		ptr = &e->score[4];
+		for (t=i=0;i <5; ++i,--ptr) {
+			if (i==1) ++t;
+			if ((t||(*ptr)) && ((*ptr)<0x0A)) {
+				if (e->playerid == PLAYER1) rspr = scorenum1[*ptr];
+				else                        rspr = scorenum2[*ptr];
+				gfx_RLETSprite_NoClip(rspr,x,y);
+			}
+			x += 8;
+		}
+	} else if (e->scorefallthrough) {
 		e->scorefallthrough--;
+
 		y = 111;
 		if (e->playerid == PLAYER1 && 
 			(opt->players == PLAYER2 || opt->type == TYPE_ARCADE)) y = 87;
-
 		x1 = (e->nums[0]).xpos;
 		x2 = ((e->nums[4]).xpos)+8;
 		y1 = y - 16;
@@ -424,6 +462,8 @@ void drawscore(entity_t *e, options_t *opt) {
 			ptr = &(posarr[isflash][isdual][e->playerid][0][0]);
 			x = ptr[0]+2;
 			y = ptr[1]+2;
+			gfx_SetColor(BG_BLACK);
+			gfx_FillRectangle_NoClip(x,y,16,16*3);
 			for (i=0,j=e->triad_idx;i<3;i++,j+=GRID_W) {
 				if (e->next_triad[0]) {
 					t = e->next_triad[i]-GRID_GEM1;
@@ -465,7 +505,9 @@ void drawscore(entity_t *e, options_t *opt) {
 						}
 					}
 				} else {
-					//Print time remain
+					//Print current best time
+					s = (char*) getScorePtr(opt);
+					gfx_PrintString(&s[4]);
 				}
 			} else if (i == SOBJ_LEVELSUB && (e->updating&UPDATE_LEVEL)) {
 				//Pring levels
@@ -997,23 +1039,23 @@ void runGame(options_t *options) {
 			if (flash_active) {
 				if (!--flash_countdown) {
 					flash_active = 0;
-					//Add to score now.
-					for (i=t=0;i<8;i++) {
-						if (i<5) {
-							t = player1.score[i] + player1.scoreadd[i] + t;
-							player1.scoreadd[i] = 0;
-						}
-						player1.score[i] = t%10;
-						t = t/10;
-					}
-					player1.updating |= (UPDATE_SCORE|UPDATE_JEWELS);
+					//Add to score now. But only in non-flashcolumns mode
 					if (options->type != TYPE_FLASH) {
+						for (i=t=0;i<8;i++) {
+							if (i<5) {
+								t = player1.score[i] + player1.scoreadd[i] + t;
+								player1.scoreadd[i] = 0;
+							}
+							player1.score[i] = t%10;
+							t = t/10;
+						}
 						templevel = (options->type == TYPE_ARCADE) ? 35 : 50;
 						templevel = player1.jewels / templevel;
 						if (templevel != player1.level) {
 							player1.level = templevel;
 							player1.updating |= UPDATE_LEVEL;
 						}
+						player1.updating |= (UPDATE_SCORE|UPDATE_JEWELS);
 					}
 					for (i=0; i<GRID_SIZE; ++i) {
 						if (player1.cgrid[i] & TILE_FLASHING) {
@@ -1045,8 +1087,8 @@ void runGame(options_t *options) {
 					flash_countdown = DESTRUCT_TIMEOUT;
 					player1.jewels += matches_found;
 					if (player1.jewels > 9999) player1.jewels = 9999; //limit
-					//Calculate score -- Not perfect but serviceable.
 					player1.combo++;
+					//Calculate score -- Not perfect but serviceable.
 					i = (matches_found+2)/3;
 					i = (i>3)?3:i;  //Lim 3
 					tempscore = ((int)i) * (player1.level+player1.baselevel+1) * (player1.combo) * 30;
