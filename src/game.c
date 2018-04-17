@@ -770,9 +770,17 @@ uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
 		} else {
 			oldtemp = (uint8_t) ((oldscore[iold]==' ')? 0 : oldscore[iold]-'0');
 		}
-		if (curscore[icur]>oldtemp) {
-			newgt = 1;
-			break;
+		if (opt->type==TYPE_FLASH) {
+			//Flash mode requires that the lowest time is the winner
+			if (curscore[icur]<oldtemp) {
+				newgt = 1;
+				break;
+			}
+		} else {
+			if (curscore[icur]>oldtemp) {
+				newgt = 1;
+				break;
+			}
 		}
 	}
 	return newgt;
@@ -871,13 +879,20 @@ void runGame(options_t *options) {
 	//End generate game static background
 	
 	while (1) {
+		//Read the keyboard
 		kb_Scan();
 		kc = kb_Data[1];
 		kd = kb_Data[7];
-		
+		//Maintain timers
+		if (--player1.subsecond == 255) {
+			player1.subsecond = ONE_SECOND-1;
+			if (player1.secondsleft) --player1.secondsleft;
+			if (player1.secondsleft2) --player1.secondsleft2;
+		}
+		//Global key response
 		if (kc&kb_Mode && player1.state != GM_NAMEENTRY) return;
-		//Left/right debouncing no matter the mode
 		if (kd&(kb_Left|kb_Right)) {
+			//Left/right debouncing no matter the mode
 			if (moveside_active) {
 				if (moveside_delay) {
 					kd = 0;
@@ -888,16 +903,16 @@ void runGame(options_t *options) {
 				moveside_delay = MOVESIDE_TIMEOUT;
 			}
 		} else moveside_active = 0;
-		//Up/down key debouncing (but only if in menu)
 		if (kd&(kb_Up|kb_Down) && (player1.state != GM_PLAYMOVE)) {
+			//Up/down key debouncing (but only if in menu)
 			if (menu_active) { 
 				kd &= ~(kb_Up|kb_Down);
 			} else {
 				menu_active = 1;
 			}
 		} else menu_active = 0;
-		//2nd key debouncing
 		if (kc&kb_2nd) {
+			//2nd key debouncing
 			if (shuffle_active) kc &= ~kb_2nd;
 			else shuffle_active = 1;
 		} else shuffle_active = 0;
@@ -906,15 +921,11 @@ void runGame(options_t *options) {
 		if (player1.state == GM_PLAYSTART) {
 			redrawboard(options);
 			if (options->type == TYPE_ARCADE) {
-				if (!player1.subsecond) {
-					player1.subsecond = 64;
-					if (!player1.secondsleft) player1.secondsleft = 12;
-					if (player1.secondsleft == 2) {
-						player1.state = GM_PLAYSTART2;
-						player1.subsecond = 96;
-						continue;
-					}
-					player1.secondsleft--;
+				if (!player1.secondsleft) player1.secondsleft = 12;
+				if (player1.secondsleft == 2 && !player1.subsecond) {
+					player1.state = GM_PLAYSTART2;
+					player1.subsecond = 96;
+					continue;
 				}
 				if (kc&kb_2nd) {
 					player1.state = GM_PLAYSTART2;
@@ -931,15 +942,11 @@ void runGame(options_t *options) {
 				}
 				drawarcademenu(&player1,true);
 			} else {
-				if (!player1.secondsleft) player1.secondsleft = 4;
-				if (!player1.subsecond) {
-					player1.subsecond = 64;
-					player1.secondsleft--;
-					if (player1.secondsleft == 1) {
-						player1.state = GM_PLAYMATCH;
-						refreshgrid(&player1);
-						continue;
-					}
+				if (!player1.secondsleft) player1.secondsleft = 2;
+				if ((!player1.subsecond) && (player1.secondsleft == 1)) {
+					player1.state = GM_PLAYMATCH;
+					refreshgrid(&player1);
+					continue;
 				}
 				x = player1.grid_left;
 				y = player1.grid_top;
@@ -947,13 +954,11 @@ void runGame(options_t *options) {
 				gfx_SetTextFGColor(FONT_GOLD);
 				gfx_PrintStringXY("game start",x+8,y+104);
 			}
-			player1.subsecond--;
 			gfx_SwapDraw();
 			continue;
 			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_PLAYSTART2) {
 			redrawboard(options);
-			player1.subsecond--;
 			if (options->type == TYPE_ARCADE) {
 				if (!player1.subsecond) {
 					t = player1.menuoption;
@@ -974,7 +979,9 @@ void runGame(options_t *options) {
 				}
 				drawarcademenu(&player1,player1.subsecond&4);
 			} else {
-				
+				//This cannot happen. If it does, quit the game.
+				dbg_sprintf(dbgout,"Error: GM_PLAYSTART2 on non-arcade mode.\n");
+				break;
 			}
 			gfx_SwapDraw();
 			continue;
@@ -1168,22 +1175,19 @@ void runGame(options_t *options) {
 			y = player1.grid_top;
 			gfx_SetClipRegion(x,y,x+96,y+208);
 			
-			if (!--player1.subsecond) {
-				player1.subsecond = ONE_SECOND;
-				if (!--player1.secondsleft) {
-					if (player1.arcaderank = scoreCmp(options)) {
-						//if high score has been achieved
-						player1.secondsleft = 31;
-						player1.state = GM_NAMEENTRY;
-						player1.menuoption = 0;
-						player1.curletter = 0;
-						player1.secondsleft2 = 0;
-						player1.cur_delay = 0;
-						memset(&player1.namebuffer,'-',3);
-					} else {
-						player1.secondsleft = 5;
-						player1.state = GM_GAMEWAITING;
-					}
+			if (!player1.subsecond && !player1.secondsleft) {
+				if (player1.arcaderank = scoreCmp(options)) {
+					//if high score has been achieved
+					player1.secondsleft = 31;
+					player1.state = GM_NAMEENTRY;
+					player1.menuoption = 0;
+					player1.curletter = 0;
+					player1.secondsleft2 = 0;
+					player1.cur_delay = 0;
+					memset(&player1.namebuffer,'-',3);
+				} else {
+					player1.secondsleft = 5;
+					player1.state = GM_GAMEWAITING;
 				}
 			}
 			if (gos_y>(72+player1.grid_top)) gos_y-=4;
@@ -1295,30 +1299,22 @@ void runGame(options_t *options) {
 			gfx_PrintStringXY("time ",x,y);
 			gfx_PrintUInt(player1.secondsleft-1,2);
 			
-			
-			if (!--player1.subsecond) {
-				player1.subsecond = ONE_SECOND;
-				if (player1.secondsleft2) --player1.secondsleft2;
-				if (!--player1.secondsleft) {
-					if (options->type == TYPE_ARCADE) {
-						
-						
-						
-					} else {
-						ptr = (uint8_t*) getScorePtr(options);
-						saveScore(options,ptr);
-						if (options->players == DOUBLES) {
-							//DEBUG: DUMMY DOUBLES ENTRY - REPLICATE P1
-							//TODO:  WAIT ON P2 AND RETRIEVE NAME VIA LINK
-							strcpy((char*)&player1.namebuffer,"DBG");
-							saveName(ptr+4+10);
-						}
+			if (!player1.subsecond && player1.secondsleft==1) {
+				if (options->type == TYPE_ARCADE) {
+					//Handle Arcade mode saving.
+				} else {
+					ptr = (uint8_t*) getScorePtr(options);
+					saveScore(options,ptr);
+					if (options->players == DOUBLES) {
+						//DEBUG: DUMMY DOUBLES ENTRY - REPLICATE P1
+						//TODO:  WAIT ON P2 AND RETRIEVE NAME VIA LINK
+						strcpy((char*)&player1.namebuffer,"DBG");
+						saveName(ptr+4+10);
 					}
-					player1.state = GM_GAMEWAITING;
-					player1.secondsleft = 5;
 				}
+				player1.state = GM_GAMEWAITING;
+				player1.secondsleft = 5;
 			}
-			
 			gfx_SwapDraw();
 			++main_timer;
 			continue;
@@ -1334,12 +1330,7 @@ void runGame(options_t *options) {
 				player1.updating = UPDATE_SCORE|UPDATE_LEVEL|UPDATE_JEWELS;
 				continue;
 			}
-			if (!--player1.subsecond) {
-				player1.subsecond = ONE_SECOND;
-				if (!--player1.secondsleft) {
-					return;
-				}
-			}
+			if (!player1.subsecond && !player1.secondsleft) return;
 			//Game over scroller - more permanent.
 			for(i=0;i<8;i++) {
 				x   = gameoverpos[i]+player1.grid_left;
