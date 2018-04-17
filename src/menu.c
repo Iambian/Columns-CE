@@ -413,15 +413,20 @@ void main_menu_loop(void) {
 						if (gameopt.players == DOUBLES) {
 							tx = x+16;
 						} else {
-							tx = x;
+							tx = x+8;
 						}
+						gfx_SetTextFGColor(FONT_WHITE);
 						gfx_PrintStringXY(s+4,tx,y);
+						gfx_SetTextFGColor(FONT_GOLD);
 						y+=16;
 						gfx_PrintStringXY("by.",x,y);
 						y+=16;
+						gfx_SetTextFGColor(FONT_WHITE);
 						if (gameopt.players == DOUBLES) {
 							gfx_PrintStringXY(s+0,x,y);
+							gfx_SetTextFGColor(FONT_GOLD);
 							gfx_PrintStringXY(" & ",x+32,y);
+							gfx_SetTextFGColor(FONT_WHITE);
 							gfx_PrintString(s+4+10);
 						} else {
 							gfx_PrintStringXY(s+0,x+32,y);

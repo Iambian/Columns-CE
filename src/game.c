@@ -806,12 +806,20 @@ void saveName(uint8_t *dest) {
 }
 
 void saveScore(options_t *opt, uint8_t *dest) {
-	uint8_t i,t;
+	uint8_t i,t,lzero;
 	saveName(dest);
 	dest += 4;
+	lzero = 0;
 	memset(dest,0,10);  //Clear score field and sets null terminator
 	for (i=(opt->type==TYPE_FLASH)?4:7; i!=255; --i,++dest) {
-		*dest = player1.score[i];
+		t = player1.score[i];
+		if (t || !i) lzero = 1;
+		if (!t && !lzero) {
+			t = ' ';
+		} else {
+			t = (t==0x0A)?':':t+'0';
+		}
+		*dest = t;
 	}
 }
 
