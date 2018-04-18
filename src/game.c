@@ -390,7 +390,7 @@ void drawscore(entity_t *e, options_t *opt) {
 	
 	
 	
-	if (opt->type == TYPE_FLASH || ( opt->time_trial && opt->type != TYPE_FLASH)
+	if (opt->type == TYPE_FLASH || ( opt->time_trial && (opt->type == TYPE_ORIGINAL))
 		&& (e->state > GM_PLAYSTART2)) {
 		//Select X
 		if (player1.playerid == PLAYER1) {
@@ -413,17 +413,22 @@ void drawscore(entity_t *e, options_t *opt) {
 		//Select number color
 		t = (e->playerid == PLAYER1) ? 16 : 24;
 		if (opt->time_trial && e->secondsleft < 59) palptr = num5;
-		else                                        palptr = num0;
+		else                                        palptr = num1;
 		gfx_SetPalette(palptr,8,PALSWAP_AREA + t);
 		//Begin rendering
 		gfx_FillRectangle(x,y,40,16);
-		ptr = &e->score[4];
+		if (opt->type == TYPE_FLASH) {
+			ptr = &e->score[4];
+		} else {
+			ptr = &e->tttimer[4];
+		}
 		for (t=i=0;i <5; ++i,--ptr) {
 			if (i==1) ++t;
-			if ((t||(*ptr)) && ((*ptr)<0x0A)) {
+			if ((t||(*ptr)) && ((*ptr)<=0x0A)) {
 				if (e->playerid == PLAYER1) rspr = scorenum1[*ptr];
 				else                        rspr = scorenum2[*ptr];
 				gfx_RLETSprite_NoClip(rspr,x,y);
+				++t;
 			}
 			x += 8;
 		}
@@ -438,8 +443,8 @@ void drawscore(entity_t *e, options_t *opt) {
 		y1 = y - 16;
 		y2 = y;
 		gfx_SetColor(1);  //black
-		gfx_FillRectangle(x1,y1,40,16);
-		gfx_SetClipRegion(x1,y1,x2,y2);
+		gfx_FillRectangle(x1,y1+1,40,16);
+		gfx_SetClipRegion(x1,y1+1,x2,y2);
 		for (i=0;i<5;i++) {
 			num = &(e->nums[i]);
 			//dbg_sprintf(dbgout,"Digit %i pos (%i,%i)\n",i,num->xpos,num->ypos);
@@ -492,8 +497,8 @@ void drawscore(entity_t *e, options_t *opt) {
 			}
 			t = 0;
 			if (i == SOBJ_SCORESUB && (e->updating&UPDATE_SCORE)) {
+				gfx_SetTextXY(x,y);
 				if (!isflash) {
-					gfx_SetTextXY(x,y);
 					for (j=8;j;j--) {
 						if (j==1) ++t;
 						if (!(t||(e->score[j-1]))) {
@@ -791,7 +796,16 @@ void initGameState(options_t *opt) {
 	}
 	player1.start_idx = x1;
 	player2.start_idx = x2;
-	
+	//Initialize score counters for flashcolumns and time trial modes
+	if (opt->type == TYPE_FLASH) {
+		player1.score[2] = 0x0A;
+		player2.score[2] = 0x0A;
+	} else if (opt->time_trial && (opt->type == TYPE_ORIGINAL)) {
+		player1.tttimer[2] = 0x0A;
+		player1.tttimer[3] = 3;
+		player2.tttimer[2] = 0x0A;
+		player2.tttimer[3] = 3;
+	}
 	//Initialize triad
 	gentriad(&player1);
 }
@@ -802,8 +816,9 @@ uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
 	uint8_t iold,icur;
 	uint8_t oldtemp;
 	uint8_t newgt;
+	uint8_t totaltemp;
 	
-	newgt=0;
+	totaltemp=newgt=0;
 	//old is B-E chr start at +0, cur is L-E uint8 start at +(isFlash)?4:7
 	for (iold=0,icur=(opt->type==TYPE_FLASH)?4:7; icur!=255; ++iold,--icur) {
 		if (oldscore[iold]==':') continue; //Skip test of semicolon object.
@@ -812,6 +827,7 @@ uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
 		} else {
 			oldtemp = (uint8_t) ((oldscore[iold]==' ')? 0 : oldscore[iold]-'0');
 		}
+		totaltemp |= oldtemp;
 		if (opt->type==TYPE_FLASH) {
 			//Flash mode requires that the lowest time is the winner
 			if (curscore[icur]<oldtemp) {
@@ -825,6 +841,8 @@ uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
 			}
 		}
 	}
+	//Autoaccept flash score if there was nothing before since normal comp fails
+	if (opt->type==TYPE_FLASH && !totaltemp) return 1;
 	return newgt;
 }
 
@@ -880,7 +898,8 @@ void saveScore(options_t *opt, uint8_t *dest) {
 //##############################################################################
 
 void runGame(options_t *options) {
-	uint8_t i,t,tp,idx;
+	uint8_t i,b,c,t,tp,idx;
+	int8_t tsig,csig;
 	uint8_t moveside_active,moveside_delay;
 	uint8_t shuffle_active;
 	uint8_t menu_active;
@@ -930,6 +949,38 @@ void runGame(options_t *options) {
 			player1.subsecond = ONE_SECOND-1;
 			if (player1.secondsleft) --player1.secondsleft;
 			if (player1.secondsleft2) --player1.secondsleft2;
+		}
+		if (((player1.state == GM_PLAYMATCH)||(player1.state == GM_PLAYMOVE))&&
+			!player1.subsecond) {
+			if (options->type == TYPE_FLASH) {
+				//Flash mode -- always incrementing.
+				for (c=1,i=0; i<5; ++i) {
+					if (i==2) continue;  //skip over colon
+					b = (i==1)?5:9; //base 6 if pos 1, else base 10.
+					t = player1.score[i] + c;
+					if (t>b) {
+						t -= (b+1);
+						c  = 1;
+					} else {
+						c = 0;
+					}
+					player1.score[i] = t;
+				}
+			} else if (options->time_trial && (options->type == TYPE_ORIGINAL)) {
+				//Time trial -- decrementing.
+				for (c=1,i=0; i<5; ++i) {
+					if (i==2) continue;  //skip over colon
+					b = (i==1)?5:9; //base 6 if pos 1, else base 10.
+					t = player1.tttimer[i] - c;
+					if (t>254) {
+						t += (b+1);
+						c = 1;
+					} else {
+						c = 0;
+					}
+					player1.tttimer[i] = t;
+				}
+			}
 		}
 		//Global key response
 		if (kc&kb_Mode && player1.state != GM_NAMEENTRY) return;
@@ -988,6 +1039,9 @@ void runGame(options_t *options) {
 				if ((!player1.subsecond) && (player1.secondsleft == 1)) {
 					player1.state = GM_PLAYMATCH;
 					refreshgrid(&player1);
+					if (options->time_trial && (options->type != TYPE_FLASH)) {
+						player1.secondsleft = 60*3;  //3 minutes
+					}
 					continue;
 				}
 				x = player1.grid_left;

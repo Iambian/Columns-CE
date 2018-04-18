@@ -44,6 +44,7 @@ typedef struct entity_t {
 	unsigned int level;    //Player's level
 	uint8_t score[8];      //player's current score (in digits) LSB-first
 	uint8_t scoreadd[5];   //5 digits to add to score[3:8]
+	uint8_t tttimer[8];    //Score-sized timer used in time trial
 	unsigned int jewels;   //Number of jewels total player has blown up (digits)
 	uint8_t combo;         //Player's current combo
 	uint8_t matches;       //9 match cycles (matchlen not considered) is level++
