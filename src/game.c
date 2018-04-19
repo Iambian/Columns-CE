@@ -301,18 +301,21 @@ void drawarcademenu(entity_t *e,uint8_t showcursor) {
 
 //Draw if any of the flags were set, but clear only mask_buf flag from dgrid
 void drawgrid(entity_t *e,uint8_t mask_buf) {
-	uint8_t tilestate,tileid,grididx,gridx,gridy,y;
-	unsigned int x;
+	uint8_t tilestate,tileid,grididx,gridx,gridy,y,y1,i;
+	gfx_rletsprite_t *rspr;
+	int x,x1;
+
+	x1 = e->grid_left;
+	y1 = e->grid_top;
+	gfx_SetClipRegion(x1,y1,x1+(GRID_W*TILE_W),y1+(13*TILE_W));
 	
-	gfx_SetClipRegion(e->grid_left,e->grid_top,e->grid_left+(GRID_W*TILE_W),e->grid_top+(13*TILE_W));
-	
-	y = e->grid_top+(12*TILE_H); //bottom row
+	y = y1+(12*TILE_H); //bottom row
 	grididx = GRID_SIZE-1;
 	for (gridy = GRID_HSTART; gridy < GRID_H; gridy++) {
-		x = e->grid_left+((GRID_W-1)*TILE_W);
+		x = x1+((GRID_W-1)*TILE_W);
 		for (gridx = 0 ; gridx < GRID_W; gridx++) {
 			tilestate = e->cgrid[grididx];
-			if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING)) {
+			if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING | TILE_TARGET_GEM)) {
 				tilestate &= ~mask_buf; //Acknowledge render
 				gfx_Sprite_NoClip(grid_spr,x,y);
 				tileid = e->grid[grididx];
@@ -322,15 +325,21 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 						tileid++;
 						if (tileid > GRID_EXP7) {
 							tileid = GRID_EMPTY;
+							tilestate &= ~TILE_TARGET_GEM;
 						}
 					}
 					tilestate |= CHANGE_BUF1 | CHANGE_BUF2; //Reverse acknowledgement.
 				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
 					if (!(tilestate&TILE_FLASHING) || main_timer&4) {
-						if (tilestate&TILE_HALFLINGS) {
-							gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+						if ((tilestate & TILE_TARGET_GEM) && (main_timer & 0x20)) {
+							rspr = (gfx_rletsprite_t*)flashgems[tileid-GRID_GEM1][(main_timer>>3)&0x07];
 						} else {
-							gfx_RLETSprite_NoClip((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y);
+							rspr = (gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1];
+						}
+						if (tilestate&TILE_HALFLINGS) {
+							gfx_RLETSprite(rspr,x,y+8);
+						} else {
+							gfx_RLETSprite_NoClip(rspr,x,y);
 						}
 					}
 				}
@@ -343,6 +352,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 		y -= TILE_H;
 	}
 	//Dealing with the half tile crap above the screen
+	
 	x = e->grid_left+((GRID_W-1)*TILE_W);
 	for (gridx=0;gridx<GRID_W;gridx++) {
 		tileid = e->grid[grididx];
@@ -569,6 +579,9 @@ void redrawboard(options_t *options) {
 //not on the bottom row. We should also implement half drop support eventually.
 void falldown(entity_t *e) {
 	uint8_t i,ip;
+	
+	//for(i=0;i<(2*GRID_W);++i) e->cgrid[i] = 0; //Preclear change state of unseen rows
+	
 	i = e->triad_idx+GRID_BELOW;
 //	dbg_sprintf(dbgout,"Cond1 %i, Cond2 %i\n",i<GRID_SIZE,e->grid[i]==GRID_EMPTY);
 	if (i<GRID_SIZE && e->grid[i]==GRID_EMPTY) {
@@ -725,6 +738,8 @@ uint8_t gridmatch(entity_t *e) {
 void initGameState(options_t *opt) {
 	uint8_t t,tt,x1,x2,dropmax;
 	uint8_t i,j,i1,i2,idx;
+	uint8_t retrygem,retryboard;
+	
 	//Clear entity memory
 	memset(&player1,0,sizeof player1);
 	memset(&player2,0,sizeof player2);
@@ -750,29 +765,38 @@ void initGameState(options_t *opt) {
 		player1.max_types = (uint8_t) opt->p1_class;
 		player2.max_types = (uint8_t) opt->p2_class;
 	}
+	//Set up dgrid to force initial render
+	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
+	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	//Preselect game level
 	player2.drop_max = player1.drop_max = LONG_TIMEOUT;
+	retrygem = 20;
+	retryboard = 254;
+	
 	if (opt->type == TYPE_FLASH) {
-		idx = GRID_SIZE-1;
-		i1 = 2+opt->p1_level;
-		i2 = 2+opt->p2_level;
-		for(i=0;i<9;i++) {
-			for (j=0;j<6;j++,idx--) {
-				t = randInt(0,5);
-				if (i<i1) {
-					if (t > opt->p1_level) {
-						tt = t-2;
-					} else tt = t;
-					player1.grid[idx] = t+GRID_GEM1;
-				}
-				if (i<i2) {
-					if (t > opt->p2_level) {
-						tt = t-2;
-					} else tt = t;
-					player2.grid[idx] = t+GRID_GEM1;
+		do {
+			idx = GRID_SIZE-1;
+			i1 = 2+opt->p1_level;
+			i2 = 2+opt->p2_level;
+			for(i=0;i<9;i++) {
+				for (j=0;j<6;j++,idx--) {
+					t = randInt(0,5);
+					if (i<i1) {
+						if (t > opt->p1_class) {
+							tt = t-2;
+						} else tt = t;
+						player1.grid[idx] = tt+GRID_GEM1;
+					}
+					if (i<i2) {
+						if (t > opt->p2_class) {
+							tt = t-2;
+						} else tt = t;
+						player2.grid[idx] = tt+GRID_GEM1;
+					}
 				}
 			}
-		}
+			--retryboard;
+		} while ((gridmatch(&player1)+gridmatch(&player2))&&retryboard);
 		player1.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
 		player2.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
 		player1.drop_max = player2.drop_max = LONG_TIMEOUT;
@@ -780,9 +804,6 @@ void initGameState(options_t *opt) {
 		player1.baselevel = opt->p1_level;
 		player2.baselevel = opt->p2_level;
 	}
-	//Set up dgrid to force initial render
-	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
-	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	//Set initial delay cycles
 	player1.cur_delay = player2.cur_delay = MATCH_TIMEOUT;
 	//Set initial index for triad generation. This position is always closest
@@ -982,6 +1003,16 @@ void runGame(options_t *options) {
 				}
 			}
 		}
+		if ( options->type == TYPE_ORIGINAL && options->time_trial &&
+			(player1.state == GM_PLAYMATCH || player1.state == GM_PLAYMOVE) &&
+			player1.secondsleft == 0) {
+			player1.state = GM_GAMEOVER;
+			player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
+			player1.subsecond = ONE_SECOND;
+			player1.secondsleft = 2;
+			gos_y = 72+208+16;
+			continue;
+		}
 		//Global key response
 		if (kc&kb_Mode && player1.state != GM_NAMEENTRY) return;
 		if (kd&(kb_Left|kb_Right)) {
@@ -1113,7 +1144,8 @@ void runGame(options_t *options) {
 					}
 					for (i=0; i<GRID_SIZE; ++i) {
 						if (player1.cgrid[i] & TILE_FLASHING) {
-							player1.cgrid[i] = CHANGE_BUF1|CHANGE_BUF2;
+							player1.cgrid[i] |= CHANGE_BUF1|CHANGE_BUF2;
+							player1.cgrid[i] &= ~TILE_FLASHING;
 							player1.grid[i] = GRID_EXP1;
 						}
 					}
@@ -1126,12 +1158,20 @@ void runGame(options_t *options) {
 				for (i=t=0; i<GRID_START; ++i) {
 					if (player1.grid[i] != GRID_EMPTY) t = 1;
 				}
-				if (t) { /* @@@@@@@@@@@@@@@@@@ GAME OVER @@@@@@@@@@@@@@@@@@@ */
+				//	player1.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
+				for (i=tp=0; i<GRID_W; ++i) {
+					tp |= player1.cgrid[(GRID_SIZE-GRID_W)+i] & TILE_TARGET_GEM;
+				}
+				
+				if (t | ((options->type == TYPE_FLASH) && !tp)) { /* @@@@@@@@@@@@@@@@@@ GAME OVER @@@@@@@@@@@@@@@@@@@ */
 					player1.state = GM_GAMEOVER;
 					player1.triad_idx = GRID_SIZE-1; //Re-used for indexing
 					player1.subsecond = ONE_SECOND;
 					player1.secondsleft = 2;
 					gos_y = 72+208+16;
+					if ((options->type == TYPE_FLASH) && !tp) {
+						player1.victory = 1;
+					}
 					continue;
 				}
 				
@@ -1272,7 +1312,11 @@ void runGame(options_t *options) {
 			gfx_SetClipRegion(x,y,x+96,y+208);
 			
 			if (!player1.subsecond && !player1.secondsleft) {
-				if (player1.arcaderank = scoreCmp(options)) {
+				player1.arcaderank = scoreCmp(options);
+				if (options->type == TYPE_FLASH && !player1.victory) {
+					player1.arcaderank = 0; //Don't allow name entry on failure
+				}
+				if (player1.arcaderank) {
 					//if high score has been achieved
 					player1.secondsleft = 31;
 					player1.state = GM_NAMEENTRY;
