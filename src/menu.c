@@ -499,17 +499,30 @@ void dispCursor(x,y,yidx,xidx,prevcursor) {
 	}
 }
 
-void *getScorePtr(options_t *options) {
+void *getScorePtr(options_t *opt) {
 	uint8_t idx;
-	if (options->type == TYPE_ARCADE) return &save.score1pa;
+	void *ptr;
+
 	idx = 0;
-	if (options->time_trial) idx = 1;
-	if (options->type == TYPE_FLASH) idx = 2;
-	if (options->players == DOUBLES) {
-		return &save.score1pd[idx];
-	} else {
-		return &save.score1ps[idx];
+	//If arcade mode, just get address of first object
+	if (opt->type == TYPE_ARCADE) return &save.arcade;
+	//Else get pointer to score affected
+	if (opt->type == TYPE_ORIGINAL) {
+		if (opt->time_trial) ++idx;
+		if (opt->players == DOUBLES) {
+			ptr = &save.doubles[idx];
+		} else {
+			ptr = &save.singles[idx];
+		}
+	} else {  //TYPE_FLASH
+		idx = opt->p1_level;
+		if (opt->players == DOUBLES) {
+			ptr = &save.flash_doubles[idx];
+		} else {
+			ptr = &save.flash_singles[idx];
+		}
 	}
+	return ptr;
 }
 
 

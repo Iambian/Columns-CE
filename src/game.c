@@ -873,7 +873,7 @@ uint8_t scoreCmp(options_t *opt) {
 	
 	if (opt->type == TYPE_ARCADE) {
 		for (i=0;i<10;i++) {
-			if (scoreCmpSub(opt,&((char*)&save.score1pa[i])[4],&player1.score)) {
+			if (scoreCmpSub(opt,&((char*)&save.arcade[i])[4],&player1.score)) {
 				return i+1;
 			}
 		}
@@ -893,6 +893,21 @@ void saveName(uint8_t *dest) {
 	}
 	*dest = 0;  //null-terminate
 }
+
+//Source is always LSB 
+void numToString(int num, char *dest, uint8_t strwidth) {
+	uint8_t i,r,t;
+	for (i=strwidth; i!=255; --i) {
+		r = num%10;
+		if (num) {
+			dest[i] = r+'0';
+		} else {
+			dest[i] = ' ';
+		}
+		num /=10;
+	}
+}
+
 
 void saveScore(options_t *opt, uint8_t *dest) {
 	uint8_t i,t,lzero;
@@ -1441,6 +1456,18 @@ void runGame(options_t *options) {
 			
 			if (!player1.subsecond && player1.secondsleft==1) {
 				if (options->type == TYPE_ARCADE) {
+					/* player1.arcaderank = 1-9. Slide data down from spot
+					then paste ascii data to slot:
+					char name[4]; char digits[10]; char jewels[5];char level[4];
+					
+					*/
+					
+					
+					
+					
+					
+					
+					
 					//Handle Arcade mode saving.
 				} else {
 					ptr = (uint8_t*) getScorePtr(options);

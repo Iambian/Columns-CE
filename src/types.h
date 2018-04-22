@@ -107,9 +107,11 @@ typedef struct arcscore_t {
 //Save file structure. Used only in one place: save
 typedef struct savefile_t {
 	uint8_t version;
-	score_t score1ps[3];     //orig 1p, orig 1p TT, flash 1p. 2p local == 1p.
-	dblscore_t score1pd[3];  //orig db, orig db TT, flash db. best always local.
-	arcscore_t score1pa[10]; //9 scores, sorted by highest score. 1 for overflow
+	score_t singles[2];    //orig 1p, orig 1p TT. 2p local == 1p.
+	dblscore_t doubles[2]; //orig db, orig db TT. best always local.
+	arcscore_t arcade[10]; //9 scores, sorted by highest score. 1 for overflow
+	score_t flash_singles[7];
+	dblscore_t flash_doubles[7];
 	options_t arcopt;
 	options_t gameopt;
 } savefile_t;
