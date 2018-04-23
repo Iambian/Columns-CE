@@ -31,6 +31,8 @@ char *bgms[] = {"clotho","lathesis","atropos"};
 char *noyes[] = {"no","yes"};
 char *previewgame[] = {"original","flash columns"};
 
+uint16_t bghs[] = {16776,12548,8320,4096,16644,12416,8192,4096};
+
 uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
 
 /* ----------------------- Define your constants here ------------------------*/
@@ -44,6 +46,7 @@ uint8_t *gamecursorx2[4]; //  ...entity each Y position index.
 void drawTitleGFX(void *titleptr);
 void *selectNewTitle(void);
 void drawMenuBG(void);
+void drawScoreBG(void);
 void dispCursor(x,y,yidx,xidx,prevcursor);
 void *getScorePtr(options_t *options);
 
@@ -55,7 +58,8 @@ void main_menu_loop(void) {
 	uint8_t curopt;
 	uint8_t debounce;
 	uint8_t gamestate;
-	unsigned int x,dx,oldx,newx,tx;
+	int x;
+	unsigned int dx,oldx,newx,tx;
 	kb_key_t kd,kc;
 	options_t *arcopt;
 	options_t gameopt;
@@ -443,6 +447,28 @@ void main_menu_loop(void) {
 				continue;
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 			case GM_OPTIONS:
+				//
+				//DEBUG: SHOW ARCADE HIGH SCORE MENU INSTEAD AND FOR NOW
+				//
+				
+				if (kc&kb_Mode) gamestate = GM_LOADINGTITLE;
+				drawScoreBG();
+				gfx_SetTextFGColor(FONT_GOLD);
+				gfx_SetTextBGColor(BG_TRANSPARENT);
+				
+				gfx_PrintStringXY("score jewels level",80,40);
+				for(y=56,i=0; i<9;++i,y+=16) {
+					gfx_SetTextXY(16,y);
+					gfx_PrintChar(i+'1');
+					gfx_PrintChar(' ');
+					gfx_PrintString(save.arcade[i].name);
+					gfx_PrintStringXY(save.arcade[i].digits,64,y);
+					gfx_PrintStringXY(save.arcade[i].jewels,136,y);
+					gfx_PrintStringXY(save.arcade[i].level,192,y);
+				}
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_ARCADEHIGHSCORES:
 				return;
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 			default:
@@ -486,6 +512,29 @@ void drawMenuBG(void) {
 		}
 	}
 }
+
+void drawScoreBG(void) {
+	uint8_t i;
+	int x,y;  //Can't cast y as uint8_t due to bounds check at end
+	uint8_t xi,yi;
+	
+	
+	gfx_SetPalette(bghs,16,PALSWAP_AREA);  //CONST bgp7 defined in game.c
+	//Draw top and bottom black borders
+	gfx_SetColor(BG_BLACK);
+	gfx_FillRectangle_NoClip(0,0,320,8);     //top border
+	gfx_FillRectangle_NoClip(0,232,320,8);   //bottom border
+	gfx_FillRectangle_NoClip(232,40,88,160); //Right panel
+	for(i=0,x=0,y=8;i<(LCD_WIDTH/32);++i,x+=32) gfx_Sprite_NoClip(hsborder,x,y);
+	for(y=40,yi=0;yi<5;y+=32,++yi) {
+		for(x=(-24),xi=0;xi<8;x+=32,++xi) {
+			gfx_Sprite(((xi^yi)&1)?greentile:cyantile,x,y);
+		}
+	}
+	for(i=0,x=0,y=200;i<(LCD_WIDTH/32);++i,x+=32) gfx_Sprite_NoClip(hsborderf,x,y);
+	
+}
+
 
 //use:          dx,y,i.j,curopt
 void dispCursor(x,y,yidx,xidx,prevcursor) {

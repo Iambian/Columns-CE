@@ -897,7 +897,7 @@ void saveName(uint8_t *dest) {
 //Source is always LSB 
 void numToString(int num, char *dest, uint8_t strwidth) {
 	uint8_t i,r,t;
-	for (i=strwidth; i!=255; --i) {
+	for (i=strwidth-1; i!=255; --i) {
 		r = num%10;
 		if (num) {
 			dest[i] = r+'0';
@@ -906,6 +906,7 @@ void numToString(int num, char *dest, uint8_t strwidth) {
 		}
 		num /=10;
 	}
+	dest[strwidth] = 0;
 }
 
 
