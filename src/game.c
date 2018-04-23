@@ -1407,7 +1407,14 @@ void runGame(options_t *options) {
 			gfx_SetTextBGColor(BG_TRANSPARENT);
 			gfx_PrintStringXY("very good!",x,y);
 			x += 24;
-			y += 24+24;
+			y += 16;
+			
+			if (options->type == TYPE_ARCADE) {
+				gfx_PrintStringXY("rank ",x-8,y);
+				gfx_PrintChar(player1.arcaderank+'0');
+			}
+			
+			y += 16;
 			gfx_SetTextXY(x,y);
 			
 			for (i=0;i<4;i++,x+=8) {
@@ -1456,19 +1463,12 @@ void runGame(options_t *options) {
 			
 			if (!player1.subsecond && player1.secondsleft==1) {
 				if (options->type == TYPE_ARCADE) {
-					/* player1.arcaderank = 1-9. Slide data down from spot
-					then paste ascii data to slot:
-					char name[4]; char digits[10]; char jewels[5];char level[4];
-					
-					*/
-					
-					
-					
-					
-					
-					
-					
-					//Handle Arcade mode saving.
+					i = player1.arcaderank - 1;
+					memmove(&save.arcade[i+1],&save.arcade[i],sizeof(save.arcade[0])*(9-i));
+					ptr = (uint8_t*) &save.arcade[i];
+					saveScore(options,ptr); //Saves name and score.
+					numToString(player1.jewels,(char*)(ptr+4+10),4); //jewels
+					numToString(player1.level+player1.baselevel,(char*)(ptr+4+10+5),3);
 				} else {
 					ptr = (uint8_t*) getScorePtr(options);
 					saveScore(options,ptr);

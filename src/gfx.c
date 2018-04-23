@@ -87,6 +87,9 @@ gfx_rletsprite_t *arcadeselect;
 gfx_rletsprite_t *gameoverspr[8][2];
 gfx_rletsprite_t *youdiditspr[13][2];
 
+gfx_sprite_t *hsborder;
+gfx_sprite_t *hsborderf;
+
 uint8_t gameoverchr[8] = {SYM_G,SYM_A,SYM_M,SYM_E,SYM_O,SYM_V,SYM_E,SYM_R};
 uint8_t youdiditchr[13]= 
 {	SYM_Y,SYM_O,SYM_U,SYM_APO,SYM_V,SYM_E,
@@ -257,6 +260,12 @@ void initGraphics(void) {
 	for (i=0;i<13;i++) {
 		decompAndVaryChars(youdiditchr[i],&youdiditspr[i]);
 	}
+	//High score border graphics
+	hsborder = malloc(32*32+2);
+	hsborderf = malloc(32*32+2);
+	dzx7_Turbo(hsborder_compressed,hsborder);
+	gfx_FlipSpriteX(hsborder,hsborderf);
+	
 }
 
 

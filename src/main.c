@@ -58,7 +58,8 @@ void main(void) {
 	save.arcopt.p2_class = NORMAL;
 	save.version = SAVE_VERSION;
 	
-	if ((slot = ti_Open(filename,"r")) != NULL) {
+	ti_CloseAll();
+	if (slot = ti_Open(filename,"r")) {
 		if (ti_GetC(slot)==SAVE_VERSION) {
 			ti_Rewind(slot);
 			ti_Read(&save,1,sizeof save,slot);
@@ -74,7 +75,7 @@ void main(void) {
 	main_menu_loop();
 	//#####################
 	
-	if ( slot = ti_Open(filename,"w") != NULL) {
+	if (slot = ti_Open(filename,"w")) {
 		ti_Write(&save,1,sizeof save,slot);
 		//ti_SetArchiveStatus(true,slot);
 		ti_Close(slot);

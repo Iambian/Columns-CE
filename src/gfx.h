@@ -47,6 +47,8 @@ extern uint8_t gameoverchr[];
 extern uint8_t youdiditchr[];
 extern uint8_t gameoverpos[];
 extern uint8_t youdiditpos[];
+extern gfx_sprite_t *hsborder;
+extern gfx_sprite_t *hsborderf;
 
 
 #endif

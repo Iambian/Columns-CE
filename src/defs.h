@@ -15,6 +15,7 @@
 #define MENU_GOLD 5
 #define MENU_MAROON 6
 #define MENU_LAVENDER 7
+/* NOTE: Codes 8-11 reserved for animated letter static palette swaps */
 #define PALSWAP_AREA 192
 
 //Grid and tile information
