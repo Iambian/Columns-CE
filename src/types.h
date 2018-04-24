@@ -24,8 +24,8 @@ extern enum Players {
 	PLAYER1 = 0, PLAYER2, DOUBLES
 };
 extern enum Difficulty { 
-	NOVICE = 3, AMATEUR, PRO,
-	EASIEST, EASY, NORMAL, HARD
+	NOVICE  = 0, AMATEUR, PRO,
+	EASIEST = 0, EASY, NORMAL, HARD
 };
 extern enum Direction {DIR_LEFT = -1,DIR_RIGHT = 1};
 
@@ -63,7 +63,7 @@ typedef struct entity_t {
 	uint8_t curletter;     //The current letter/sym to be displayed in name entry
 	uint8_t namebuffer[4]; //Zero-terimated buffer storing current name
 	uint8_t secondsleft2;  //Second timer, used in name entry input timeout
-	enum ScrollDir sdir;
+	enum ScrollDir sdir;   //
 	uint8_t arcaderank;    //Rank data for arcade scoring
 	
 	

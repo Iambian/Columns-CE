@@ -335,9 +335,6 @@ void main_menu_loop(void) {
 			case GM_GAMEPREVIEW:
 				if (kc&kb_Mode) gamestate = GM_GAMEOPTIONS;
 				if (kc&kb_2nd) {
-					//continue; //DEBUG: DON'T DO ANY OF THIS STUFF YET.
-					gameopt.p1_class += NOVICE;  //convert.
-					gameopt.p2_class += NOVICE;  //convert.
 					//Start the game...
 					initGameState(&gameopt);
 					runGame(&gameopt);
@@ -553,8 +550,7 @@ void *getScorePtr(options_t *opt) {
 	void *ptr;
 
 	diffidx = idx = 0;
-	//if (opt->p1_class == 
-	
+	if (opt->p1_class < 3) diffidx = opt->p1_class;
 	
 	//If arcade mode, just get address of first object
 	if (opt->type == TYPE_ARCADE) return &save.arcade;

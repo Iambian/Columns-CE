@@ -532,10 +532,10 @@ void drawscore(entity_t *e, options_t *opt) {
 				//dbg_sprintf(dbgout,"Updating jewels: %i\n",e->jewels);
 				if (isflash) {
 					switch (e->max_types) {
-						case NOVICE: s = "NOV"; break;
-						case AMATEUR:s = "AMA"; break;
-						case PRO:    s = "PRO"; break;
-						default:     s = "!!!"; break;
+						case 4:  s = "NOV"; break;
+						case 5:  s = "AMA"; break;
+						case 6:  s = "PRO"; break;
+						default: s = "!!!"; break;
 					}
 					gfx_PrintStringXY(s,x,y);
 				} else {
@@ -762,8 +762,8 @@ void initGameState(options_t *opt) {
 		player1.max_types = 5;
 		player2.max_types = 5;
 	} else {
-		player1.max_types = (uint8_t) opt->p1_class;
-		player2.max_types = (uint8_t) opt->p2_class;
+		player1.max_types = 2 + (uint8_t) opt->p1_class;
+		player2.max_types = 2 + (uint8_t) opt->p2_class;
 	}
 	//Set up dgrid to force initial render
 	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
@@ -782,13 +782,13 @@ void initGameState(options_t *opt) {
 				for (j=0;j<6;j++,idx--) {
 					t = randInt(0,5);
 					if (i<i1) {
-						if (t > opt->p1_class) {
+						if (t > player1.max_types) {
 							tt = t-2;
 						} else tt = t;
 						player1.grid[idx] = tt+GRID_GEM1;
 					}
 					if (i<i2) {
-						if (t > opt->p2_class) {
+						if (t > player2.max_types) {
 							tt = t-2;
 						} else tt = t;
 						player2.grid[idx] = tt+GRID_GEM1;
