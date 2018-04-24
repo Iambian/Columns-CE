@@ -836,34 +836,28 @@ void initGameState(options_t *opt) {
 uint8_t scoreCmpSub(options_t *opt, char *oldscore, uint8_t *curscore) {
 	uint8_t iold,icur;
 	uint8_t oldtemp;
+	uint8_t curtemp;
 	uint8_t newgt;
 	uint8_t totaltemp;
 	
 	totaltemp=newgt=0;
 	//old is B-E chr start at +0, cur is L-E uint8 start at +(isFlash)?4:7
 	for (iold=0,icur=(opt->type==TYPE_FLASH)?4:7; icur!=255; ++iold,--icur) {
-		if (oldscore[iold]==':') continue; //Skip test of semicolon object.
-		if (oldscore[iold] == 0) {
-			oldtemp = 0;
-		} else {
-			oldtemp = (uint8_t) ((oldscore[iold]==' ')? 0 : oldscore[iold]-'0');
-		}
-		totaltemp |= oldtemp;
+		oldtemp = oldscore[iold];
+		curtemp = curscore[icur];
+		if (oldtemp==':') continue; //Skip test of semicolon object.
+		if (oldtemp==' ') oldtemp = 0;
+		else if (oldtemp) oldtemp = oldtemp-'0';
+		if (curtemp == oldtemp) continue; //Keep going if nums match
+		//On an non-matching number, it's decision time. Kill loop immediately after.
+		
 		if (opt->type==TYPE_FLASH) {
-			//Flash mode requires that the lowest time is the winner
-			if (curscore[icur]<oldtemp) {
-				newgt = 1;
-				break;
-			}
+			if (curtemp<oldtemp) ++newgt;
 		} else {
-			if (curscore[icur]>oldtemp) {
-				newgt = 1;
-				break;
-			}
+			if (curtemp>oldtemp) ++newgt;
 		}
+		break;
 	}
-	//Autoaccept flash score if there was nothing before since normal comp fails
-	if (opt->type==TYPE_FLASH && !totaltemp) return 1;
 	return newgt;
 }
 
@@ -872,8 +866,8 @@ uint8_t scoreCmp(options_t *opt) {
 	uint8_t i,t;
 	
 	if (opt->type == TYPE_ARCADE) {
-		for (i=0;i<10;i++) {
-			if (scoreCmpSub(opt,&((char*)&save.arcade[i])[4],&player1.score)) {
+		for (i=0;i<9;i++) {
+			if (scoreCmpSub(opt,((char*)(&save.arcade[i]))+4,&player1.score)) {
 				return i+1;
 			}
 		}

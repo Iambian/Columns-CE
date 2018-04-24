@@ -528,7 +528,7 @@ void drawScoreBG(void) {
 	for(i=0,x=0,y=8;i<(LCD_WIDTH/32);++i,x+=32) gfx_Sprite_NoClip(hsborder,x,y);
 	for(y=40,yi=0;yi<5;y+=32,++yi) {
 		for(x=(-24),xi=0;xi<8;x+=32,++xi) {
-			gfx_Sprite(((xi^yi)&1)?greentile:cyantile,x,y);
+			gfx_Sprite(((xi^yi)&1)?cyantile:greentile,x,y);
 		}
 	}
 	for(i=0,x=0,y=200;i<(LCD_WIDTH/32);++i,x+=32) gfx_Sprite_NoClip(hsborderf,x,y);
@@ -549,26 +549,29 @@ void dispCursor(x,y,yidx,xidx,prevcursor) {
 }
 
 void *getScorePtr(options_t *opt) {
-	uint8_t idx;
+	uint8_t idx,diffidx;
 	void *ptr;
 
-	idx = 0;
+	diffidx = idx = 0;
+	//if (opt->p1_class == 
+	
+	
 	//If arcade mode, just get address of first object
 	if (opt->type == TYPE_ARCADE) return &save.arcade;
 	//Else get pointer to score affected
 	if (opt->type == TYPE_ORIGINAL) {
 		if (opt->time_trial) ++idx;
 		if (opt->players == DOUBLES) {
-			ptr = &save.doubles[idx];
+			ptr = &save.doubles[idx][diffidx];
 		} else {
-			ptr = &save.singles[idx];
+			ptr = &save.singles[idx][diffidx];
 		}
 	} else {  //TYPE_FLASH
 		idx = opt->p1_level;
 		if (opt->players == DOUBLES) {
-			ptr = &save.flash_doubles[idx];
+			ptr = &save.flash_doubles[idx][diffidx];
 		} else {
-			ptr = &save.flash_singles[idx];
+			ptr = &save.flash_singles[idx][diffidx];
 		}
 	}
 	return ptr;
