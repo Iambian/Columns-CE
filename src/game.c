@@ -624,7 +624,14 @@ void movedir(entity_t *e, enum Direction dir) {
 		//dbg_sprintf(dbgout,"Dir change to %i\n",dir);
 	} else return;
 	//Do not change anything else if we tried to move on top of something else.
-	if (e->grid[idx+(GRID_W*2)] != GRID_EMPTY) return;
+	
+	if (e->cgrid[oldidx]&TILE_HALFLINGS)
+	{
+		i=3;
+	} else {
+		i=2;
+	}
+	if (e->grid[idx+(GRID_W*i)] != GRID_EMPTY) return;
 	//Begin exchanging.
 	e->triad_idx = idx;
 	for (i=0;i<3;++i) {
