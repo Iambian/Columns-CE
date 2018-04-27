@@ -38,6 +38,9 @@ uint16_t bghs[] = {16776,12548,8320,4096,16644,12416,8192,4096};
 
 uint8_t mainmenustate[] = {GM_ARCADEOPTIONS,GM_GAMEMENU,GM_OPTIONS,255};
 
+uint8_t mainoptcursory[] = {24,64,120,160,184,208};
+
+
 /* ----------------------- Define your constants here ------------------------*/
 uint8_t gamecursory1;    // Up/down changes these and indexes to gamecursorx.
 uint8_t gamecursory2;    // Controlled remotely by other calculator.
@@ -448,18 +451,43 @@ void main_menu_loop(void) {
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 			case GM_OPTIONS:
 				drawMenuBG();
+				
+				if (kc&kb_2nd) {
+					switch (curopt) {
+						case 0:
+							arcopt->p1_class = (arcopt->p1_class+1)&3;
+							break;
+						case 1:
+							break;
+						case 2:
+							break;
+						case 3:
+							break;
+						case 4:
+							gamestate = GM_COLORTEST;
+							break;
+						case 5:
+						default:
+							gamestate = GM_LOADINGTITLE;
+							break;
+					}
+				}
+				
 				if (kc&kb_Mode) {
-					curopt = 2;
 					gamestate = GM_LOADINGTITLE;
 					continue;
 				}
 				
-				//TEST CURSOR POSITION:
-				gfx_SetTextFGColor(FONT_CYAN);
-				gfx_SetTextXY(8,24);
-				gfx_PrintChar(']');
+				if (kd&kb_Down) {
+					++curopt;
+					if (curopt>5) curopt=0;
+				}
+				if (kd&kb_Up) {
+					if (!curopt) curopt=6;
+					--curopt;
+				}
 				
-				
+
 				//NOTE: CONTROL SCHEME NOT CHANGEABLE YET. IT ONLY APPEARS
 				//      FOR INSTRUCTIONAL PURPOSES.
 				
@@ -482,6 +510,9 @@ void main_menu_loop(void) {
 				//Special values
 				gfx_SetTextFGColor(FONT_CYAN);
 				gfx_PrintStringXY("pad down  2nd button  mode button",32,80);
+				//Cursor. Re-uses cyan color setting
+				gfx_SetTextXY(8,mainoptcursory[curopt]);
+				gfx_PrintChar(']');
 				
 				break;
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -505,6 +536,16 @@ void main_menu_loop(void) {
 					gfx_PrintStringXY(save.arcade[i].jewels,136,y);
 					gfx_PrintStringXY(save.arcade[i].level,192,y);
 				}
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_COLORTEST:
+				if (kc&(kb_Mode|kb_2nd)) {
+					gamestate = GM_OPTIONS;
+					continue;
+				}
+				dzx7_Turbo(colortest_compressed,gfx_vbuffer);
+				gfx_SetTextFGColor(FONT_WHITE);
+				gfx_PrintStringXY("color test",120,16);
 				break;
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 			default:

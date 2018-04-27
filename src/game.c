@@ -769,8 +769,8 @@ void initGameState(options_t *opt) {
 		player1.max_types = 5;
 		player2.max_types = 5;
 	} else {
-		player1.max_types = 2 + (uint8_t) opt->p1_class;
-		player2.max_types = 2 + (uint8_t) opt->p2_class;
+		player1.max_types = 3 + (uint8_t) opt->p1_class;
+		player2.max_types = 3 + (uint8_t) opt->p2_class;
 	}
 	//Set up dgrid to force initial render
 	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
