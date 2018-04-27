@@ -115,6 +115,7 @@ typedef struct savefile_t {
 	dblscore_t flash_doubles[7][3];
 	options_t arcopt;
 	options_t gameopt;
+	uint8_t twoplayer;        //enum NONE=0,AIEASY,AINORM,AIHARD,AICHEAT,LINKPLAY
 } savefile_t;
 
 

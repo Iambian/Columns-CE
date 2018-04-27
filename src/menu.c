@@ -30,6 +30,9 @@ char *levelnums[] = {"0","1","2","3","4","5","6","7","8","9"};
 char *bgms[] = {"clotho","lathesis","atropos"};
 char *noyes[] = {"no","yes"};
 char *previewgame[] = {"original","flash columns"};
+char *arcdiff[] = {"easiest","easy","normal","hard"};
+char *twoplayermode[] = {"none","AI easy","AI normal","AI hard","AI super","2 calc link"};
+
 
 uint16_t bghs[] = {16776,12548,8320,4096,16644,12416,8192,4096};
 
@@ -444,6 +447,45 @@ void main_menu_loop(void) {
 				continue;
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 			case GM_OPTIONS:
+				drawMenuBG();
+				if (kc&kb_Mode) {
+					curopt = 2;
+					gamestate = GM_LOADINGTITLE;
+					continue;
+				}
+				
+				//TEST CURSOR POSITION:
+				gfx_SetTextFGColor(FONT_CYAN);
+				gfx_SetTextXY(8,24);
+				gfx_PrintChar(']');
+				
+				
+				//NOTE: CONTROL SCHEME NOT CHANGEABLE YET. IT ONLY APPEARS
+				//      FOR INSTRUCTIONAL PURPOSES.
+				
+				gfx_SetTextBGColor(BG_TRANSPARENT);
+				//Option headers
+				gfx_SetTextFGColor(FONT_GOLD);
+				gfx_PrintStringXY("difficulty (arcade)",24,24);
+				gfx_PrintStringXY("control",24,64);
+				gfx_PrintStringXY("two-player mode",24,120);
+				gfx_PrintStringXY("sound test (n/a)",24,160);
+				gfx_PrintStringXY("color test",24,184);
+				gfx_PrintStringXY("exit",24,208);
+				
+				//Option values
+				gfx_SetTextFGColor(FONT_WHITE);
+				gfx_PrintStringXY(arcdiff[arcopt->p1_class],40,40);
+				gfx_PrintStringXY("  drop      rotate       quit",32,96);
+				gfx_PrintStringXY(twoplayermode[save.twoplayer],40,136);
+				
+				//Special values
+				gfx_SetTextFGColor(FONT_CYAN);
+				gfx_PrintStringXY("pad down  2nd button  mode button",32,80);
+				
+				break;
+			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+			case GM_ARCADEHIGHSCORES:
 				//
 				//DEBUG: SHOW ARCADE HIGH SCORE MENU INSTEAD AND FOR NOW
 				//
@@ -464,9 +506,6 @@ void main_menu_loop(void) {
 					gfx_PrintStringXY(save.arcade[i].level,192,y);
 				}
 				break;
-			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-			case GM_ARCADEHIGHSCORES:
-				return;
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 			default:
 				return;

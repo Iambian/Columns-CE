@@ -2,7 +2,7 @@
 #define __columns_defs__
 
 #define VERSION_INFO 0.1
-#define SAVE_VERSION 3
+#define SAVE_VERSION 4
 
 
 // Fixed palette entries as defined in convpng.ini
