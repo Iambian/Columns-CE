@@ -776,7 +776,7 @@ void initGameState(options_t *opt) {
 	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	//Preselect game level
-	player2.drop_max = player1.drop_max = LONG_TIMEOUT;
+	player2.drop_max = player1.drop_max = 2;
 	retrygem = 20;
 	retryboard = 254;
 	
@@ -806,8 +806,9 @@ void initGameState(options_t *opt) {
 		} while ((gridmatch(&player1)+gridmatch(&player2))&&retryboard);
 		player1.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
 		player2.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
-		player1.drop_max = player2.drop_max = LONG_TIMEOUT;
+		player1.drop_max = player2.drop_max = 2;
 	} else {
+		//### TODO: CREATE CALL FOR SETTING DROP_MAX IF LEVEL NOT 0
 		player1.baselevel = opt->p1_level;
 		player2.baselevel = opt->p2_level;
 	}
@@ -952,10 +953,11 @@ void runGame(options_t *options) {
 	uint8_t palette_offset;
 	int tempscore,x,y,templevel,gos_y;
 	gfx_rletsprite_t *rsptr;
+	uint8_t drop_timer;
 	
 	
 	moveside_delay = MOVESIDE_TIMEOUT;
-	menu_active = flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
+	drop_timer = menu_active = flash_countdown = flash_active = score_active = shuffle_active = moveside_active = 0;
 	gos_y  = 0;
 	//Generate game static background
 	
@@ -1271,7 +1273,7 @@ void runGame(options_t *options) {
 			//If push down, speed things up everywhere.
 			if (kd&kb_Down) {
 				player1.stay_delay = 1;
-				player1.cur_delay = 1;
+				player1.cur_delay = 64;
 			}
 			//Check and handle any left/right motions.
 			if (kd&kb_Left) movedir(&player1,DIR_LEFT);
@@ -1291,17 +1293,18 @@ void runGame(options_t *options) {
 			
 			//Check if the spot below triad is empty or not on bottom row.
 			if ((player1.grid[idx+(GRID_W*3)] == GRID_EMPTY) && (idx<GRID_TBTM)) {
-				//If empty, reset stay_delay and check cur_delay if need to fall
-				//dbg_sprintf(dbgout,"Condition 1: %i\n",player1.grid[idx+(GRID_W*3)] == GRID_EMPTY);
-				//dbg_sprintf(dbgout,"Condition 2: %i\n",GRID_EMPTY && idx<GRID_TBTM);
-				player1.stay_delay = LONG_TIMEOUT;
-				if (!--(player1.cur_delay)) {
-					falldown(&player1);
-					if (player1.triad_idx >= GRID_START && !player1.next_triad[0]) {
-						gentriad(&player1);
-					}
-					player1.cur_delay = player1.drop_max;
+				if (player1.triad_idx >= GRID_START && !player1.next_triad[0]) {
+					gentriad(&player1);
 				}
+				for (i=0;i<4;++i) {
+					//Check if there will be a uint8_t overflow
+					if ((((int)drop_timer)+player1.cur_delay)>255) {
+						falldown(&player1);
+					}
+					drop_timer += player1.cur_delay;
+				}
+				player1.cur_delay = player1.drop_max;
+				player1.stay_delay = LONG_TIMEOUT;
 			} else {
 				player1.cur_delay = 1; //Make sure delay hovers at 1 in case
 				//If not empty, make sure stay_delay is nonzero else do matching
