@@ -26,11 +26,7 @@
 
 
 
-
-
-
-
-
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 void refreshgrid(entity_t *e) {
 	uint8_t i;
 	for(i=0;i<GRID_SIZE;i++) {
@@ -38,6 +34,63 @@ void refreshgrid(entity_t *e) {
 	}
 }
 
+
+
+void gfx_Sprite_NoClip_Safe(gfx_sprite_t *spr,int x, int y) {
+	uint8_t *ptr,err;
+	ptr = (uint8_t*) spr;
+	err = 0;
+	
+	if (ptr[0]!=16 || ptr[1]!=16) {
+		dbg_sprintf(dbgerr,"Incorrect sprite size. Found: (%i,%i)\n",ptr[0],ptr[1]);
+		err++;
+	}
+	if (x>(319-16) || x<0 || y>(239-16) || y<0) {
+		dbg_sprintf(dbgerr,"Sprite out of bounds. Found: (%i,%i)\n",x,y);
+		err++;
+	}
+	if (err) dbg_Debugger();
+	
+	gfx_Sprite_NoClip(spr,x,y);
+}
+
+void gfx_RLETSprite_NoClip_Safe(gfx_rletsprite_t *spr,int x, int y) {
+	uint8_t *ptr,err;
+	ptr = (uint8_t*)spr;
+	err = 0;
+	
+	if (ptr[0]!=16 || ptr[1]!=16) {
+		dbg_sprintf(dbgerr,"Incorrect sprite size. Found: (%i,%i)\n",ptr[0],ptr[1]);
+		err++;
+	}
+	if (x>(319-16) || x<0 || y>(239-16) || y<0) {
+		dbg_sprintf(dbgerr,"Sprite out of bounds. Found: (%i,%i)\n",x,y);
+		err++;
+	}
+	if (err) dbg_Debugger();
+	
+	gfx_RLETSprite_NoClip(spr,x,y);
+}
+
+void gfx_RLETSprite_Safe(gfx_rletsprite_t *spr,int x, int y) {
+	uint8_t *ptr,err;
+	ptr = (uint8_t*)spr;
+	err = 0;
+	
+	if (ptr[0]!=16 || ptr[1]!=16) {
+		dbg_sprintf(dbgerr,"Incorrect sprite size. Found: (%i,%i)\n",ptr[0],ptr[1]);
+		err++;
+	}
+	if (x>(319-16) || x<0 || y>(239-16) || y<0) {
+		dbg_sprintf(dbgerr,"Sprite out of bounds. Found: (%i,%i)\n",x,y);
+		err++;
+	}
+	if (err) dbg_Debugger();
+	
+	gfx_RLETSprite(spr,x,y);
+}
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 //Draw if any of the flags were set, but clear only mask_buf flag from dgrid
 void drawgrid(entity_t *e,uint8_t mask_buf) {
 	uint8_t tilestate,tileid,grididx,gridx,gridy,y,y1,i;
@@ -56,10 +109,14 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 			tilestate = e->cgrid[grididx];
 			if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING | TILE_TARGET_GEM)) {
 				tilestate &= ~mask_buf; //Acknowledge render
-				gfx_Sprite_NoClip(grid_spr,x,y);
+				//@@@
+				//gfx_Sprite_NoClip(grid_spr,x,y);
+				gfx_Sprite_NoClip_Safe(grid_spr,x,y);
 				tileid = e->grid[grididx];
 				if (tileid >= GRID_EXP1 && tileid <= GRID_EXP7) {
-					gfx_RLETSprite_NoClip((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
+					//@@@
+					//gfx_RLETSprite_NoClip((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
+					gfx_RLETSprite_NoClip_Safe((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
 					if (!(main_timer&1)) {
 						tileid++;
 						if (tileid > GRID_EXP7) {
@@ -76,9 +133,13 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 							rspr = (gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1];
 						}
 						if (tilestate&TILE_HALFLINGS) {
-							gfx_RLETSprite(rspr,x,y+8);
+							//@@@
+							//gfx_RLETSprite(rspr,x,y+8);
+							gfx_RLETSprite_Safe(rspr,x,y+8);
 						} else {
-							gfx_RLETSprite_NoClip(rspr,x,y);
+							//@@@
+							//gfx_RLETSprite_NoClip(rspr,x,y);
+							gfx_RLETSprite_NoClip_Safe(rspr,x,y);
 						}
 					}
 				}
@@ -98,7 +159,9 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 		tilestate = e->cgrid[grididx];
 		if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
 			if (tilestate&mask_buf && tilestate&TILE_HALFLINGS ) {
-				gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+				//@@@
+				//gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+				gfx_RLETSprite_Safe((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
 			}
 		}
 		e->cgrid[grididx] = tilestate & ~mask_buf;
@@ -109,7 +172,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 	gfx_SetClipRegion(0,0,LCD_WIDTH,LCD_HEIGHT);
 }
 
-
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 //Known problem: Does not properly transfer grid properties on falldown.
 //This problem affects TILE_TARGET_GEM in Flash Columns mode if the target is
 //not on the bottom row. We should also implement half drop support eventually.
@@ -149,7 +212,7 @@ void falldown(entity_t *e) {
 	}
 }
 
-
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 void movedir(entity_t *e, enum Direction dir) {
 	int8_t i,idx,oldidx,temp;
 	temp = 0;
@@ -190,7 +253,7 @@ void movedir(entity_t *e, enum Direction dir) {
 }
 
 
-
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 //Using the TILE_FLASHING flag to mark and detect tiles that have matched.
 uint8_t gridmatch(entity_t *e) {
 	uint8_t i,t,matches,dist;
