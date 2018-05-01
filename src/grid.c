@@ -110,13 +110,13 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 			if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING | TILE_TARGET_GEM)) {
 				tilestate &= ~mask_buf; //Acknowledge render
 				//@@@
-				//gfx_Sprite_NoClip(grid_spr,x,y);
-				gfx_Sprite_NoClip_Safe(grid_spr,x,y);
+				gfx_Sprite_NoClip(grid_spr,x,y);
+				//gfx_Sprite_NoClip_Safe(grid_spr,x,y);
 				tileid = e->grid[grididx];
 				if (tileid >= GRID_EXP1 && tileid <= GRID_EXP7) {
 					//@@@
-					//gfx_RLETSprite_NoClip((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
-					gfx_RLETSprite_NoClip_Safe((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
+					gfx_RLETSprite_NoClip((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
+					//gfx_RLETSprite_NoClip_Safe((gfx_rletsprite_t*)explosion_spr[tileid-GRID_EXP1],x,y);
 					if (!(main_timer&1)) {
 						tileid++;
 						if (tileid > GRID_EXP7) {
@@ -134,12 +134,12 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 						}
 						if (tilestate&TILE_HALFLINGS) {
 							//@@@
-							//gfx_RLETSprite(rspr,x,y+8);
-							gfx_RLETSprite_Safe(rspr,x,y+8);
+							gfx_RLETSprite(rspr,x,y+8);
+							//gfx_RLETSprite_Safe(rspr,x,y+8);
 						} else {
 							//@@@
-							//gfx_RLETSprite_NoClip(rspr,x,y);
-							gfx_RLETSprite_NoClip_Safe(rspr,x,y);
+							gfx_RLETSprite_NoClip(rspr,x,y);
+							//gfx_RLETSprite_NoClip_Safe(rspr,x,y);
 						}
 					}
 				}
@@ -160,8 +160,8 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 		if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
 			if (tilestate&mask_buf && tilestate&TILE_HALFLINGS ) {
 				//@@@
-				//gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
-				gfx_RLETSprite_Safe((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+				gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
+				//gfx_RLETSprite_Safe((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
 			}
 		}
 		e->cgrid[grididx] = tilestate & ~mask_buf;

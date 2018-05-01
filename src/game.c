@@ -1024,6 +1024,7 @@ void runGame(options_t *options) {
 					player1.cur_delay = player1.drop_max;
 					player1.stay_delay = LONG_TIMEOUT;
 					player1.state = GM_PLAYMOVE;
+					continue;
 				}
 			}
 			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
@@ -1049,11 +1050,12 @@ void runGame(options_t *options) {
 			if (!player1.next_triad[0]) player1.updating |= UPDATE_NEXT;
 			idx = player1.triad_idx;
 			
+			if (player1.triad_idx >= GRID_START && !player1.next_triad[0]) {
+				gentriad(&player1);
+			}
 			//Check if the spot below triad is empty or not on bottom row.
 			if ((player1.grid[idx+(GRID_W*3)] == GRID_EMPTY) && (idx<GRID_TBTM)) {
-				if (player1.triad_idx >= GRID_START && !player1.next_triad[0]) {
-					gentriad(&player1);
-				}
+				//dbg_sprintf(dbgout,"DROP COND %i,%i\n",(player1.grid[idx+(GRID_W*3)] == GRID_EMPTY),(idx<GRID_TBTM));
 				for (i=0;i<4;++i) {
 					//Check if there will be a uint8_t overflow
 					if ((((int)drop_timer)+player1.cur_delay)>255) {
@@ -1064,7 +1066,6 @@ void runGame(options_t *options) {
 				player1.cur_delay = player1.drop_max;
 				player1.stay_delay = LONG_TIMEOUT;
 			} else {
-				player1.cur_delay = 1; //Make sure delay hovers at 1 in case
 				//If not empty, make sure stay_delay is nonzero else do matching
 				if (!--(player1.stay_delay)) {
 					//Check to see if we didn't stop past the top. If so, game over.
