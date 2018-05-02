@@ -348,9 +348,28 @@ uint8_t grid4j[] = {
 	1,2,3,4,2,1,
 	3,4,1,2,3,4
 };
+
+uint8_t grid5j[] = {
+	3,4,5,2,3,1,
+	4,2,1,4,5,5,
+	2,4,1,2,3,3,
+	1,2,3,5,5,2,
+	3,4,5,1,3,4,
+	5,1,3,3,5,2,
+	3,4,5,2,1,4,
+	1,2,3,4,5,2
+};
 	
-	
-	
+uint8_t grid6j[] = {
+	4,6,5,2,1,3,
+	1,3,4,6,5,2,
+	5,2,1,3,4,6,
+	3,1,4,6,3,1,
+	6,4,5,2,2,5,
+	5,2,1,3,4,6,
+	5,4,3,5,6,6,
+	1,2,1,3,4,2,
+};
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -358,28 +377,19 @@ uint8_t grid4j[] = {
 //Assumes height=9. Caller is responsible for trimming the results
 void genflashgrid(entity_t *e) {
 	uint8_t maxtypes;
-	uint8_t *grid;
-	uint8_t i,j,h,x,y;
-	uint8_t gidx;
-	uint8_t temp;
+	uint8_t *jptr;
+	uint8_t i,gidx;
 	
 	maxtypes = e->max_types;
-	grid = e->grid;
+	i = randInt(0,7) * GRID_W;
+	gidx = (GRID_H-9) * GRID_W;
 	
-	temp = randInt(0,maxtypes);
-	h = 9;
-	//Special generator for 4-jewel (NOV) mode.
-	if (maxtypes==3) {
-		i = randInt(0,7);        //Select column to start searching seed for.
-		temp = randInt(0,1)*2+2; //Reselect from one of two possible seeds
-		while (grid4j[6*i+3]!=temp)	i = (i+1)%3;
-		for (i=i*6,gidx=(GRID_H-9)*GRID_W;gidx<GRID_SIZE;++gidx) {
-			grid[gidx] = grid4j[i];
-			if (++i > (6*8-1)) i=0;
-		}
-	} else {
-		grid[GRID_SIZE-3] = temp; //placeholder
-	}
+	if (maxtypes==3)      jptr = grid4j;
+	else if (maxtypes==4) jptr = grid5j;
+	else                  jptr = grid6j;
+	
+	for (; gidx<GRID_SIZE; ++gidx,i=(i+1)%48) e->grid[gidx] = jptr[i];
+	
 }
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -387,11 +397,9 @@ void genflashgrid(entity_t *e) {
 void trimgrid(entity_t *e, uint8_t height) {
 	uint8_t i,end;
 	
-	end = (GRID_H-(9-height))*GRID_W;
+	end = (GRID_H-height)*GRID_W;
 	if (end>GRID_SIZE) return;  //in case of uninit or bad input (i see u p2)
-	for(i=(GRID_H-9)*GRID_W; i<end; ++i) {
-		e->cgrid[i] = e->grid[i] = 0;
-	}
+	for(i=(GRID_H-9)*GRID_W; i<end; ++i) e->grid[i] = 0;
 }
 
 
