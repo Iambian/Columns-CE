@@ -26,7 +26,17 @@ entity_t player1;
 entity_t player2;
 uint8_t numbuf[6];
 
-uint8_t fallspeed[] = {30,25,20,15,15,10,7,5,4,3,2,1,1,1,2,1,1,1,1,1};
+#define MAX_SPEED 64
+uint8_t fallspeed[] = {
+  //000,001,002,003,004,005,006,007,008,009
+	2  ,4  ,6  ,12 ,20 ,28 ,12 ,20 ,28 ,32 ,
+  //010,011,012,013,014,015,016,017,018,019
+	48 ,28 ,32 ,48 ,64 ,2  ,2  ,2  ,2  ,2  , 
+  //020,021,022,023,024,025,026,027,028,029
+	2  ,2  ,2  ,2  ,2  ,2  ,2  ,2  ,2  ,2  ,
+	
+	
+};
 
 uint16_t bgp1[] = {528,396,264,4228,404,272,140,8};                  //1PO: cyan/blue
 uint16_t bgp2[] = {20876,16648,12420,8192,21008,16780,12552,8324};   //2PO: pink/lpink
@@ -343,8 +353,8 @@ void drawscore(entity_t *e, options_t *opt) {
 			(opt->players == PLAYER2 || opt->type == TYPE_ARCADE)) y = 71;
 		//Select number color
 		t = (e->playerid == PLAYER1) ? 16 : 24;
-		if (opt->time_trial && e->secondsleft < 59) palptr = num5;
-		else                                        palptr = num1;
+		if (opt->time_trial && e->secondsleft < (59+1)) palptr = num5;
+		else                                            palptr = num1;
 		gfx_SetPalette(palptr,8,PALSWAP_AREA + t);
 		//Begin rendering
 		gfx_FillRectangle(x,y,40,16);
@@ -533,10 +543,6 @@ void initGameState(options_t *opt) {
 	//Set up dgrid to force initial render
 	memset(player1.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
 	memset(player2.cgrid,CHANGE_BUF1|CHANGE_BUF2,GRID_SIZE);
-	//Preselect game level
-	player2.drop_max = player1.drop_max = 2;
-	retrygem = 20;
-	retryboard = 254;
 	
 	if (opt->type == TYPE_FLASH) {
 		genflashgrid(&player1);
@@ -547,12 +553,14 @@ void initGameState(options_t *opt) {
 		
 		player1.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
 		player2.cgrid[GRID_SIZE-3] |= TILE_TARGET_GEM;
-		player1.drop_max = player2.drop_max = 2;
 	} else {
 		//### TODO: CREATE CALL FOR SETTING DROP_MAX IF LEVEL NOT 0
 		player1.baselevel = opt->p1_level;
 		player2.baselevel = opt->p2_level;
 	}
+	//Preselect game level
+	player1.drop_max = fallspeed[player1.baselevel];
+	player2.drop_max = fallspeed[player2.baselevel];
 	//Set initial delay cycles
 	player1.cur_delay = player2.cur_delay = MATCH_TIMEOUT;
 	//Set initial index for triad generation. This position is always closest
@@ -572,9 +580,10 @@ void initGameState(options_t *opt) {
 		player2.score[2] = 0x0A;
 	} else if (opt->time_trial && (opt->type == TYPE_ORIGINAL)) {
 		player1.tttimer[2] = 0x0A;
-		player1.tttimer[3] = 3;
+		player1.tttimer[3] = 0;   //dbg. set to 3 when done
+		player1.tttimer[0] = 9;   //dbg. Trying to suss out cause of crash.
 		player2.tttimer[2] = 0x0A;
-		player2.tttimer[3] = 3;
+		player2.tttimer[3] = 1;
 	}
 	//Initialize triad
 	gentriad(&player1);
@@ -695,6 +704,7 @@ void runGame(options_t *options) {
 	int tempscore,x,y,templevel,gos_y;
 	gfx_rletsprite_t *rsptr;
 	uint8_t drop_timer;
+	int ltemp;
 	
 	
 	moveside_delay = MOVESIDE_TIMEOUT;
@@ -831,7 +841,7 @@ void runGame(options_t *options) {
 					player1.state = GM_PLAYMATCH;
 					refreshgrid(&player1);
 					if (options->time_trial && (options->type != TYPE_FLASH)) {
-						player1.secondsleft = 60*3;  //3 minutes
+						player1.secondsleft = 9+1; //60*3;  //3 minutes
 					}
 					continue;
 				}
@@ -884,6 +894,37 @@ void runGame(options_t *options) {
 			if (flash_active) {
 				if (!--flash_countdown) {
 					flash_active = 0;
+					
+					if (options->type == TYPE_ARCADE) {
+						switch (options->p1_class) {
+							case EASIEST:
+							default:
+								templevel = 50;
+								break;
+							case EASY:
+								templevel = 40;
+								break;
+							case NORMAL:
+								templevel = 35;
+								break;
+							case HARD:
+								templevel = 25;
+								break;
+						}
+					} else {
+						templevel = 50;
+					}
+					templevel = player1.jewels / templevel;
+					if (templevel != player1.level) {
+						player1.level = templevel;
+						player1.updating |= UPDATE_LEVEL;
+						if ((player1.level+player1.baselevel) > 29) {
+							player1.drop_max = 255;
+						} else {
+							player1.drop_max = fallspeed[player1.baselevel+player1.level];
+						}
+					}
+					player1.updating |= (UPDATE_SCORE|UPDATE_JEWELS);
 					//Add to score now. But only in non-flashcolumns mode
 					if (options->type != TYPE_FLASH) {
 						for (i=t=0;i<8;i++) {
@@ -894,13 +935,6 @@ void runGame(options_t *options) {
 							player1.score[i] = t%10;
 							t = t/10;
 						}
-						templevel = (options->type == TYPE_ARCADE) ? 35 : 50;
-						templevel = player1.jewels / templevel;
-						if (templevel != player1.level) {
-							player1.level = templevel;
-							player1.updating |= UPDATE_LEVEL;
-						}
-						player1.updating |= (UPDATE_SCORE|UPDATE_JEWELS);
 					}
 					for (i=0; i<GRID_SIZE; ++i) {
 						if (player1.cgrid[i] & TILE_FLASHING) {
