@@ -69,6 +69,16 @@
 #define GRID_EXP5 0x0B
 #define GRID_EXP6 0x0C
 #define GRID_EXP7 0x0D
+//Magic gem information
+#define GRID_MAG1 0x0E
+#define GRID_MAG2 0x0F
+#define GRID_MAG3 0x10
+#define GRID_MAG4 0x11
+#define GRID_MAG5 0x12
+#define GRID_MAG6 0x13
+
+
+
 
 //Game interface IDs
 #define BG_CENT 0

@@ -65,6 +65,7 @@ typedef struct entity_t {
 	uint8_t secondsleft2;  //Second timer, used in name entry input timeout
 	enum ScrollDir sdir;   //
 	uint8_t arcaderank;    //Rank data for arcade scoring
+	uint8_t timetomagic;   //Cycles before magic gem is released
 	
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.

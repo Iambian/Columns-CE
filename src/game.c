@@ -412,10 +412,13 @@ void drawscore(entity_t *e, options_t *opt) {
 			gfx_FillRectangle_NoClip(x,y,16,16*3);
 			for (i=0,j=e->triad_idx;i<3;i++,j+=GRID_W) {
 				if (e->next_triad[0]) {
-					t = e->next_triad[i]-GRID_GEM1;
+					t = e->next_triad[i];
 				} else {
-					t = e->grid[j]-GRID_GEM1;
+					t = e->grid[j];
 				}
+				if (t>=GRID_GEM1 && t<=GRID_GEM6) t -= GRID_GEM1;
+				else if (t>=GRID_MAG1 && t<=GRID_MAG6) t-= GRID_MAG1;
+				else continue;
 				gfx_RLETSprite_NoClip(gems_spr[t],x,y);
 				y+=16;
 			}
@@ -574,6 +577,9 @@ void initGameState(options_t *opt) {
 	}
 	player1.start_idx = x1;
 	player2.start_idx = x2;
+	//Initialize state for magic gem deployment
+	player1.timetomagic = randInt(10,100);
+	player2.timetomagic = randInt(10,100);
 	//Initialize score counters for flashcolumns and time trial modes
 	if (opt->type == TYPE_FLASH) {
 		player1.score[2] = 0x0A;
@@ -866,10 +872,11 @@ void runGame(options_t *options) {
 					} else if (t==1) {
 						player1.score[4] = 2;
 						player1.baselevel = 5;
-						
+						player1.timetomagic = randInt(1,10);
 					} else {
 						player1.score[4] = 5;
 						player1.baselevel = 10;
+						player1.timetomagic = randInt(1,10);
 					}
 					player1.updating |= UPDATE_SCORE|UPDATE_LEVEL;
 					continue;
@@ -1068,7 +1075,13 @@ void runGame(options_t *options) {
 			idx = player1.triad_idx;
 			
 			if (player1.triad_idx >= GRID_START && !player1.next_triad[0]) {
-				gentriad(&player1);
+				t = 0;
+				for (i=GRID_START; i<GRID_SIZE; i++) {
+					if (player1.grid[i]) t++;
+				}
+				if (t>60 && (!--player1.timetomagic)) {
+					for (i=0;i<3;i++) player1.next_triad[i] = GRID_MAG1;
+				} else gentriad(&player1);
 			}
 			//Check if the spot below triad is empty or not on bottom row.
 			if ((player1.grid[idx+(GRID_W*3)] == GRID_EMPTY) && (idx<GRID_TBTM)) {
