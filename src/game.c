@@ -418,7 +418,7 @@ void drawscore(entity_t *e, options_t *opt) {
 				}
 				if (t>=GRID_GEM1 && t<=GRID_GEM6) t -= GRID_GEM1;
 				else if (t>=GRID_MAG1 && t<=GRID_MAG6) t-= GRID_MAG1;
-				else continue;
+				else continue;  //prevents display of nondisplayable objects
 				gfx_RLETSprite_NoClip(gems_spr[t],x,y);
 				y+=16;
 			}
@@ -1079,7 +1079,7 @@ void runGame(options_t *options) {
 				for (i=GRID_START; i<GRID_SIZE; i++) {
 					if (player1.grid[i]) t++;
 				}
-				if (t>60 && (!--player1.timetomagic)) {
+				if (t>50 && (!--player1.timetomagic)) {
 					for (i=0;i<3;i++) player1.next_triad[i] = GRID_MAG1;
 				} else gentriad(&player1);
 			}
