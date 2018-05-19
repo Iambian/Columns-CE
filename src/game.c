@@ -816,8 +816,19 @@ void runGame(options_t *options) {
 			if (shuffle_active) kc &= ~kb_2nd;
 			else shuffle_active = 1;
 		} else shuffle_active = 0;
-		
-			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
+		//Magic gem handler
+		if (++player1.magicgemtimer > 2) {
+			player1.magicgemtimer=0;
+			if ((t=player1.triad_idx)<78) {
+				for (i=0;i<3;i++,t+=GRID_W) {
+					if (player1.grid[t]>=GRID_MAG1 && player1.grid[t]<=GRID_MAG6) {
+						player1.grid[t]++;
+						if (player1.grid[t]>GRID_MAG6) player1.grid[t] = GRID_MAG1;
+					}
+				}
+			}
+		}
+		/* ----%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		if (player1.state == GM_PLAYSTART) {
 			redrawboard(options);
 			if (options->type == TYPE_ARCADE) {

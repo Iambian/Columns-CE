@@ -66,6 +66,7 @@ typedef struct entity_t {
 	enum ScrollDir sdir;   //
 	uint8_t arcaderank;    //Rank data for arcade scoring
 	uint8_t timetomagic;   //Cycles before magic gem is released
+	uint8_t magicgemtimer; //0-2 since magic gems update every 3 frames
 	
 	
 	uint8_t next_triad[3]; //next 3 blocks, top to bottom.

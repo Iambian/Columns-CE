@@ -121,9 +121,6 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 					gfx_RLETSprite_NoClip(rspr,x,y);
 					//gfx_RLETSprite_NoClip_Safe(rspr,x,y);
 				}
-				tileid++;
-				if (tileid>GRID_MAG6) tileid=GRID_MAG1;
-				e->grid[grididx] = tileid;
 			}
 			//Everything else
 			else if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING | TILE_TARGET_GEM)) {
@@ -181,11 +178,6 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 				rspr = magicgems[tileid-GRID_MAG1];
 				gfx_RLETSprite(rspr,x,y+8);
 				//gfx_RLETSprite_Safe(rspr,x,y+8);
-				if (main_timer&1) {
-					tileid++;
-					if (tileid>GRID_MAG6) tileid=GRID_MAG1;
-					e->grid[grididx] = tileid;
-				}
 			}		
 			//Everything else
 			else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
