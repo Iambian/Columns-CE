@@ -416,10 +416,10 @@ void drawscore(entity_t *e, options_t *opt) {
 				} else {
 					t = e->grid[j];
 				}
-				if (t>=GRID_GEM1 && t<=GRID_GEM6) t -= GRID_GEM1;
-				else if (t>=GRID_MAG1 && t<=GRID_MAG6) t-= GRID_MAG1;
+				if (t>=GRID_GEM1 && t<=GRID_GEM6) rspr = gems_spr[t-GRID_GEM1];
+				else if (t>=GRID_MAG1 && t<=GRID_MAG6) rspr = magicgems[t-GRID_MAG1];
 				else continue;  //prevents display of nondisplayable objects
-				gfx_RLETSprite_NoClip(gems_spr[t],x,y);
+				gfx_RLETSprite_NoClip(rspr,x,y);
 				y+=16;
 			}
 		}
@@ -705,7 +705,7 @@ void runGame(options_t *options) {
 	int longctr;
 	uint8_t flash_active,flash_countdown;
 	uint8_t score_active,score_countdown;
-	uint8_t matches_found;
+	int8_t matches_found;
 	uint8_t palette_offset;
 	int tempscore,x,y,templevel,gos_y;
 	gfx_rletsprite_t *rsptr;
@@ -819,6 +819,13 @@ void runGame(options_t *options) {
 		//Magic gem handler
 		if (++player1.magicgemtimer > 2) {
 			player1.magicgemtimer=0;
+/*			ptr = player1.next_triad;
+			if (*ptr>=GRID_MAG1 && *ptr<=GRID_MAG6) {
+				for (i=0;i<3;i++,ptr++) {
+					if (++ptr[0] > GRID_MAG6) ptr[0] = GRID_MAG1;
+				}
+				player1.updating |= UPDATE_NEXT;
+			} */
 			if ((t=player1.triad_idx)<78) {
 				for (i=0;i<3;i++,t+=GRID_W) {
 					if (player1.grid[t]>=GRID_MAG1 && player1.grid[t]<=GRID_MAG6) {
@@ -991,18 +998,28 @@ void runGame(options_t *options) {
 				if (matches_found) {
 					flash_active = 1;
 					flash_countdown = DESTRUCT_TIMEOUT;
-					player1.jewels += matches_found;
-					if (player1.jewels > 9999) player1.jewels = 9999; //limit
 					player1.combo++;
-					//Calculate score -- Not perfect but serviceable.
-					i = (matches_found+2)/3;
-					i = (i>3)?3:i;  //Lim 3
-					tempscore = ((int)i) * (player1.level+player1.baselevel+1) * (player1.combo) * 30;
+					if (matches_found<0) {
+						matches_found = -matches_found;
+						if (matches_found==3) {
+							tempscore = 10000;  //unused magic gem.
+						} else {
+							i = ((matches_found+2)/3) * (player1.level+player1.baselevel+1);
+							tempscore = i * player1.combo * 30;
+						}
+					} else {
+						//Calculate score -- Not perfect but serviceable.
+						i = (matches_found+2)/3;
+						i = (i>3)?3:i;  //Lim 3
+						tempscore = ((int)i) * (player1.level+player1.baselevel+1) * (player1.combo) * 30;
+					}
+					player1.jewels += matches_found;
 					//Extract digits.
 					for (i=0,ptr=numbuf; i<5; i++,ptr++) {
 						player1.scoreadd[i] = ptr[0] = tempscore%10;
 						tempscore /= 10;
 					}
+					if (player1.jewels > 9999) player1.jewels = 9999; //limit
 					//Load digits to buffer.
 					y = 111;  //constant in all cases except 1P:2P
 					if (player1.playerid == PLAYER1) {

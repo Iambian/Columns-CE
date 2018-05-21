@@ -94,6 +94,7 @@ void gfx_RLETSprite_Safe(gfx_rletsprite_t *spr,int x, int y) {
 //Draw if any of the flags were set, but clear only mask_buf flag from dgrid
 void drawgrid(entity_t *e,uint8_t mask_buf) {
 	uint8_t tilestate,tileid,grididx,gridx,gridy,y,y1,i;
+	uint8_t ismagic;
 	gfx_rletsprite_t *rspr;
 	int x,x1;
 
@@ -108,22 +109,11 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 		for (gridx = 0 ; gridx < GRID_W; gridx++) {
 			tilestate = e->cgrid[grididx];
 			tileid = e->grid[grididx];
-			//Magic gem implement
-			if (tileid >= GRID_MAG1 && tileid<=GRID_MAG6) {
-				gfx_Sprite_NoClip(grid_spr,x,y);
-				rspr = magicgems[tileid-GRID_MAG1];
-				if (tilestate&TILE_HALFLINGS) {
-					//@@@
-					gfx_RLETSprite(rspr,x,y+8);
-					//gfx_RLETSprite_Safe(rspr,x,y+8);
-				} else {
-					//@@@
-					gfx_RLETSprite_NoClip(rspr,x,y);
-					//gfx_RLETSprite_NoClip_Safe(rspr,x,y);
-				}
-			}
-			//Everything else
-			else if (tilestate & (CHANGE_BUF1 | CHANGE_BUF2 | TILE_FLASHING | TILE_TARGET_GEM)) {
+			
+			ismagic=0;
+			if (tileid >= GRID_MAG1 && tileid <=GRID_MAG6) ismagic++;
+			
+			if ((tilestate & (CHANGE_BUF1|CHANGE_BUF2|TILE_FLASHING|TILE_TARGET_GEM) || ismagic)) {
 				tilestate &= ~mask_buf; //Acknowledge render
 				//@@@
 				gfx_Sprite_NoClip(grid_spr,x,y);
@@ -140,12 +130,16 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 						}
 					}
 					tilestate |= CHANGE_BUF1 | CHANGE_BUF2; //Reverse acknowledgement.
-				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
+				} else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6 || ismagic) {
 					if (!(tilestate&TILE_FLASHING) || main_timer&4) {
-						if ((tilestate & TILE_TARGET_GEM) && (main_timer & 0x20)) {
-							rspr = (gfx_rletsprite_t*)flashgems[tileid-GRID_GEM1][(main_timer>>3)&0x07];
+						if (ismagic) {
+							rspr = (gfx_rletsprite_t*)magicgems[tileid-GRID_MAG1];
 						} else {
-							rspr = (gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1];
+							if ((tilestate & TILE_TARGET_GEM) && (main_timer & 0x20)) {
+								rspr = (gfx_rletsprite_t*)flashgems[tileid-GRID_GEM1][(main_timer>>3)&0x07];
+							} else {
+								rspr = (gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1];
+							}
 						}
 						if (tilestate&TILE_HALFLINGS) {
 							//@@@
@@ -172,7 +166,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 	for (gridx=0;gridx<GRID_W;gridx++) {
 		tileid = e->grid[grididx];
 		tilestate = e->cgrid[grididx];
-		if (tilestate&mask_buf && tilestate&TILE_HALFLINGS ) {
+		if (tilestate&TILE_HALFLINGS ) {
 			//Magic gem implement
 			if (tileid >= GRID_MAG1 && tileid<=GRID_MAG6) {
 				rspr = magicgems[tileid-GRID_MAG1];
@@ -180,7 +174,7 @@ void drawgrid(entity_t *e,uint8_t mask_buf) {
 				//gfx_RLETSprite_Safe(rspr,x,y+8);
 			}		
 			//Everything else
-			else if (tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
+			else if ((tilestate&mask_buf) && tileid >= GRID_GEM1 && tileid <=GRID_GEM6) {
 				//@@@
 				gfx_RLETSprite((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
 				//gfx_RLETSprite_Safe((gfx_rletsprite_t*)gems_spr[tileid-GRID_GEM1],x,y+8);
@@ -277,83 +271,101 @@ void movedir(entity_t *e, enum Direction dir) {
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 //Using the TILE_FLASHING flag to mark and detect tiles that have matched.
-uint8_t gridmatch(entity_t *e) {
+int8_t gridmatch(entity_t *e) {
 	uint8_t i,t,matches,dist;
 	uint8_t curidx,curx,cury;
 	uint8_t tempidx,tempx,tempy;
 	uint8_t limx,limy,limidx;
+	uint8_t ismagic;
 	
 	//Ensure grid is free of anything flashing. This shouldn't happen, though.
 	for(i=0;i<GRID_SIZE;++i) e->cgrid[i] &= ~TILE_FLASHING;
 	
-	//Outer loop - vertical traversal
-	curidx = 0;
-	for (cury=0,limy=GRID_H; limy; --limy,++cury) {
-		//Inner(ish) loop - horizontal sweep
-		for(curx=0,limx=GRID_W; limx; --limx,++curx,++curidx) {
-			//If tile is empty
+	ismagic = curidx = 0;
+	t = e->grid[e->triad_idx];
+	
+	if (t>=GRID_MAG1 && t<=GRID_MAG6) {
+		ismagic++;
+		//Make sure that the magic gems are flashing
+		for (i=0,curidx=e->triad_idx;i<3;i++,curidx+=GRID_W) {
+			e->cgrid[curidx] |= TILE_FLASHING;
+		}
+		//And check to see if the magic gems are actually touching anything
+		if (curidx<GRID_SIZE) {
+			//And if so, match against all gems found.
 			t = e->grid[curidx];
-			if (t==GRID_EMPTY || t<GRID_GEM1 || t>GRID_GEM6) continue;
-			//dbg_sprintf(dbgout,"Mstate cx:%i cy:%i lx:%i ly:%i idx:%i\n",curx,cury,limx,limy,curidx);
-			//Checking horizontal matches (towards right)
-			for (limidx=limx,tempidx=curidx,dist=0;
-			limidx; --limidx,++tempidx,++dist) {
-				if (e->grid[tempidx] != t) break;
+			for (i=0;i<GRID_SIZE;i++) {
+				if (e->grid[i] == t) e->cgrid[i] |= TILE_FLASHING;
 			}
-			if (dist>2) {
-				//if (!limidx) --tempidx;
-				for (;dist;--dist) {
-					--tempidx;
-					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
-					e->cgrid[tempidx] |= TILE_FLASHING;
+		}
+	} else {
+		for (cury=0,limy=GRID_H; limy; --limy,++cury) {
+			//Inner(ish) loop - horizontal sweep
+			for(curx=0,limx=GRID_W; limx; --limx,++curx,++curidx) {
+				//If tile is empty
+				t = e->grid[curidx];
+				if (t==GRID_EMPTY || t<GRID_GEM1 || t>GRID_GEM6) continue;
+				//dbg_sprintf(dbgout,"Mstate cx:%i cy:%i lx:%i ly:%i idx:%i\n",curx,cury,limx,limy,curidx);
+				//Checking horizontal matches (towards right)
+				for (limidx=limx,tempidx=curidx,dist=0;
+				limidx; --limidx,++tempidx,++dist) {
+					if (e->grid[tempidx] != t) break;
 				}
-			}
-			//Checking diagonal matches (towards bottom-right)
-			for (limidx=((limy>limx)?limx:limy),tempidx=curidx,dist=0;
-			limidx; --limidx,tempidx+=(GRID_W+1),++dist) {
-				if (e->grid[tempidx] != t) break;
-			}
-			if (dist>2) {
-				//if (!limidx) --tempidx;
-				for (;dist;--dist) {
-					tempidx-=(GRID_W+1);
-					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
-					e->cgrid[tempidx] |= TILE_FLASHING;
+				if (dist>2) {
+					//if (!limidx) --tempidx;
+					for (;dist;--dist) {
+						--tempidx;
+						//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+						e->cgrid[tempidx] |= TILE_FLASHING;
+					}
 				}
-			}
-			//Checking vertical matches (towards bottom)
-			for (limidx=limy,tempidx=curidx,dist=0;
-			limidx; --limidx,tempidx+=GRID_W,++dist) {
-				if (e->grid[tempidx] != t) break;
-			}
-			if (dist>2) {
-				//if (!limidx) --tempidx;
-				for (;dist;--dist) {
-					tempidx-=GRID_W;
-					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
-					e->cgrid[tempidx] |= TILE_FLASHING;
+				//Checking diagonal matches (towards bottom-right)
+				for (limidx=((limy>limx)?limx:limy),tempidx=curidx,dist=0;
+				limidx; --limidx,tempidx+=(GRID_W+1),++dist) {
+					if (e->grid[tempidx] != t) break;
 				}
-			}
-			//Checking diagonal matches (towards bottom-left)
-			for (limidx=((cury>curx+1)?curx+1:cury),tempidx=curidx,dist=0;
-			limidx; --limidx,tempidx+=(GRID_W-1),++dist) {
-				if (e->grid[tempidx] != t) break;
-			}
-			if (dist>2) {
-				//if (!limidx) --tempidx;
-				for (;dist;--dist) {
-					tempidx-=(GRID_W-1);
-					//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
-					e->cgrid[tempidx] |= TILE_FLASHING;
+				if (dist>2) {
+					//if (!limidx) --tempidx;
+					for (;dist;--dist) {
+						tempidx-=(GRID_W+1);
+						//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+						e->cgrid[tempidx] |= TILE_FLASHING;
+					}
+				}
+				//Checking vertical matches (towards bottom)
+				for (limidx=limy,tempidx=curidx,dist=0;
+				limidx; --limidx,tempidx+=GRID_W,++dist) {
+					if (e->grid[tempidx] != t) break;
+				}
+				if (dist>2) {
+					//if (!limidx) --tempidx;
+					for (;dist;--dist) {
+						tempidx-=GRID_W;
+						//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+						e->cgrid[tempidx] |= TILE_FLASHING;
+					}
+				}
+				//Checking diagonal matches (towards bottom-left)
+				for (limidx=((cury>curx+1)?curx+1:cury),tempidx=curidx,dist=0;
+				limidx; --limidx,tempidx+=(GRID_W-1),++dist) {
+					if (e->grid[tempidx] != t) break;
+				}
+				if (dist>2) {
+					//if (!limidx) --tempidx;
+					for (;dist;--dist) {
+						tempidx-=(GRID_W-1);
+						//dbg_sprintf(dbgout,"Match at idx %i, dist %i\n",tempidx,dist);
+						e->cgrid[tempidx] |= TILE_FLASHING;
+					}
 				}
 			}
 		}
 	}
-	
 	//Check how many tiles have been set to flashing and return that number.
 	for(matches=i=0; i<GRID_SIZE; ++i) {
 		if (e->cgrid[i]&TILE_FLASHING) ++matches;
 	}
+	if (ismagic) matches = -matches;
 	//dbg_sprintf(dbgout,"Matches found: %i\n",matches);
 	return matches;
 }
