@@ -1,7 +1,7 @@
 #ifndef __columns_defs__
 #define __columns_defs__
 
-#define VERSION_INFO "v 0.9 "
+#define VERSION_INFO "v 0.9a"
 #define SAVE_VERSION 5
 
 
