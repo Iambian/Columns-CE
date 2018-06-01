@@ -197,6 +197,9 @@ void runGame(options_t *options);  //Starts the game session
 
 
 
+void setTimeToMagic(entity_t *e, uint8_t target) {
+	e->timetomagic = randInt(target-5,target+5);
+}
 
 
 void gentriad(entity_t *entity) {
@@ -410,17 +413,19 @@ void drawscore(entity_t *e, options_t *opt) {
 			y = ptr[1]+2;
 			gfx_SetColor(BG_BLACK);
 			gfx_FillRectangle_NoClip(x,y,16,16*3);
-			for (i=0,j=e->triad_idx;i<3;i++,j+=GRID_W) {
-				if (e->next_triad[0]) {
-					t = e->next_triad[i];
-				} else {
-					t = e->grid[j];
+			if (e->state == GM_PLAYMATCH || e->state == GM_PLAYMOVE) { //workaround for TT disp bug if triad is above top on game end
+				for (i=0,j=e->triad_idx;i<3;i++,j+=GRID_W) {
+					if (e->next_triad[0]) {
+						t = e->next_triad[i];
+					} else {
+						t = e->grid[j];
+					}
+					if (t>=GRID_GEM1 && t<=GRID_GEM6) rspr = gems_spr[t-GRID_GEM1];
+					else if (t>=GRID_MAG1 && t<=GRID_MAG6) rspr = magicgems[t-GRID_MAG1];
+					else continue;  //prevents display of nondisplayable objects
+					gfx_RLETSprite_NoClip(rspr,x,y);
+					y+=16;
 				}
-				if (t>=GRID_GEM1 && t<=GRID_GEM6) rspr = gems_spr[t-GRID_GEM1];
-				else if (t>=GRID_MAG1 && t<=GRID_MAG6) rspr = magicgems[t-GRID_MAG1];
-				else continue;  //prevents display of nondisplayable objects
-				gfx_RLETSprite_NoClip(rspr,x,y);
-				y+=16;
 			}
 		}
 		for (i=SOBJ_SCORESUB;i<(SOBJ_JEWELSSUB+1);i++) {
@@ -578,18 +583,17 @@ void initGameState(options_t *opt) {
 	player1.start_idx = x1;
 	player2.start_idx = x2;
 	//Initialize state for magic gem deployment
-	player1.timetomagic = randInt(10,100);
-	player2.timetomagic = randInt(10,100);
+	setTimeToMagic(&player1,TIME_TO_MAGIC_DEFAULT);
+	setTimeToMagic(&player2,TIME_TO_MAGIC_DEFAULT);
 	//Initialize score counters for flashcolumns and time trial modes
 	if (opt->type == TYPE_FLASH) {
 		player1.score[2] = 0x0A;
 		player2.score[2] = 0x0A;
 	} else if (opt->time_trial && (opt->type == TYPE_ORIGINAL)) {
 		player1.tttimer[2] = 0x0A;
-		player1.tttimer[3] = 0;   //dbg. set to 3 when done
-		player1.tttimer[0] = 9;   //dbg. Trying to suss out cause of crash.
+		player1.tttimer[3] = 3;
 		player2.tttimer[2] = 0x0A;
-		player2.tttimer[3] = 1;
+		player2.tttimer[3] = 3;
 	}
 	//Initialize triad
 	gentriad(&player1);
@@ -787,6 +791,7 @@ void runGame(options_t *options) {
 			player1.subsecond = ONE_SECOND;
 			player1.secondsleft = 2;
 			gos_y = 72+208+16;
+			player1.updating |= UPDATE_NEXT;
 			continue;
 		}
 		//Global key response
@@ -865,7 +870,7 @@ void runGame(options_t *options) {
 					player1.state = GM_PLAYMATCH;
 					refreshgrid(&player1);
 					if (options->time_trial && (options->type != TYPE_FLASH)) {
-						player1.secondsleft = 9+1; //60*3;  //3 minutes
+						player1.secondsleft = 60*3+1;  //3 minutes
 					}
 					continue;
 				}
@@ -890,12 +895,13 @@ void runGame(options_t *options) {
 					} else if (t==1) {
 						player1.score[4] = 2;
 						player1.baselevel = 5;
-						player1.timetomagic = randInt(1,10);
+						setTimeToMagic(&player1,6);
 					} else {
 						player1.score[4] = 5;
 						player1.baselevel = 10;
-						player1.timetomagic = randInt(1,10);
+						setTimeToMagic(&player1,6);
 					}
+					player1.drop_max = fallspeed[player1.baselevel];  //rechoose
 					player1.updating |= UPDATE_SCORE|UPDATE_LEVEL;
 					continue;
 				}
@@ -991,6 +997,7 @@ void runGame(options_t *options) {
 					if ((options->type == TYPE_FLASH) && !tp) {
 						player1.victory = 1;
 					}
+					player1.updating |= UPDATE_NEXT;
 					continue;
 				}
 				
@@ -1062,22 +1069,29 @@ void runGame(options_t *options) {
 					else palptr = numpal[player1.combo-1];
 					gfx_SetPalette(palptr,8,PALSWAP_AREA + 16);
 				} else {
-					player1.combo = 0;
-					//Emit triad object.
-					player1.triad_idx = t = player1.start_idx;
-					dbg_sprintf(dbgout,"Emitting triad objects: ");
-					for (i=0;i<3;++i,t+=GRID_W) {
-						player1.grid[t] = player1.next_triad[i];
-						dbg_sprintf(dbgout,"%i, ",player1.next_triad[i]);
-						player1.cgrid[t] = CHANGE_BUF1|CHANGE_BUF2;
-						player1.next_triad[i] = 0;
-					}
 					dbg_sprintf(dbgout,"\n");
-					player1.cur_delay = player1.drop_max;
-					player1.stay_delay = LONG_TIMEOUT;
-					player1.state = GM_PLAYMOVE;
+					player1.cur_delay = DROP_NEXT_DELAY;
+					player1.state = GM_DELAYNEXT;
 					continue;
 				}
+			}
+			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
+		} else if (player1.state == GM_DELAYNEXT) {
+			if (!--player1.cur_delay) {
+				player1.combo = 0;
+				//Emit triad object.
+				player1.triad_idx = t = player1.start_idx;
+				dbg_sprintf(dbgout,"Emitting triad objects: ");
+				for (i=0;i<3;++i,t+=GRID_W) {
+					player1.grid[t] = player1.next_triad[i];
+					dbg_sprintf(dbgout,"%i, ",player1.next_triad[i]);
+					player1.cgrid[t] = CHANGE_BUF1|CHANGE_BUF2;
+					player1.next_triad[i] = 0;
+				}
+				player1.cur_delay = player1.drop_max;
+				player1.stay_delay = LONG_TIMEOUT;
+				player1.state = GM_PLAYMOVE;
+				continue;
 			}
 			/* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
 		} else if (player1.state == GM_PLAYMOVE) {
@@ -1107,8 +1121,9 @@ void runGame(options_t *options) {
 				for (i=GRID_START; i<GRID_SIZE; i++) {
 					if (player1.grid[i]) t++;
 				}
-				if (t>50 && (!--player1.timetomagic)) {
-					for (i=0;i<3;i++) player1.next_triad[i] = GRID_MAG1;
+				if (t>50 && (!--player1.timetomagic) && options->type == TYPE_ARCADE) {
+					for (i=0;i<3;i++) player1.next_triad[i] = GRID_MAG1;						setTimeToMagic(&player1,6);
+					setTimeToMagic(&player1,TIME_TO_MAGIC_DEFAULT);
 				} else gentriad(&player1);
 			}
 			//Check if the spot below triad is empty or not on bottom row.

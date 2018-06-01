@@ -1,9 +1,12 @@
 #ifndef __columns_defs__
 #define __columns_defs__
 
-#define VERSION_INFO 0.1
-#define SAVE_VERSION 4
+#define VERSION_INFO "v 0.9 "
+#define SAVE_VERSION 5
 
+
+//Miscellaneous
+#define TIME_TO_MAGIC_DEFAULT 30
 
 // Fixed palette entries as defined in convpng.ini
 #define BG_TRANSPARENT 0
@@ -39,6 +42,7 @@
 #define DESTRUCT_TIMEOUT 38
 #define SCOREFALL_TIMEOUT 50
 #define ONE_SECOND 64
+#define DROP_NEXT_DELAY 16
 
 //Grid buffer masking information
 #define CHANGE_BUF1 (1<<7)
