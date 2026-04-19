@@ -22,7 +22,7 @@
 #include <graphx.h>
 #include <debug.h>
 #include <keypadc.h>
-#include <decompress.h>
+#include <compression.h>
 #include <fileioc.h>
 
 #include "defs.h"
@@ -43,12 +43,13 @@ char *filename = "ColumDAT";
 
 int randI(int imin,int imax);
 void seedRand(void);
+//void dzx7_Turbo(void *src, void *dest);
 
 
 //******************************************************************************
 void main(void) {
 	ti_var_t slot;
-	seedRand();
+	srandom(rtc_Time());
 	initGraphics();
 	/* Initialize game variables */
 	memset(&save,0,sizeof save);
@@ -90,22 +91,8 @@ void main(void) {
 int randI(int imin,int imax) {  //Because apparently randInt is actually a macro.
 	return randInt(imin,imax);
 }
-
-void seedRand() {
-	asm("	LD A,R");  //Grab semirandom value from register R
-	asm("	LD B,A");  //And seed _RandInt by running it R times.
-	asm("__loop13487:");
-	asm("	PUSH BC");
-	asm("		LD BC,255");
-	asm("		PUSH BC");
-	asm("		LD BC,0");
-	asm("		PUSH BC");
-	asm("		CALL _randI"); //which we can't do directly because randInt is
-	asm("		POP BC");      //a macro, not a function. Had to wrap it in one.
-	asm("		POP BC");
-	asm("	POP BC");
-	asm("	DJNZ __loop13487");
-	return;
+/*
+void dzx7_Turbo(void *src, void *dest) {
+	zx7_Decompress(dest,src);
 }
-
-
+*/

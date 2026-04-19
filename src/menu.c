@@ -53,7 +53,7 @@ void drawTitleGFX(void *titleptr);
 void *selectNewTitle(void);
 void drawMenuBG(void);
 void drawScoreBG(void);
-void dispCursor(x,y,yidx,xidx,prevcursor);
+void dispCursor(int x,int y,int yidx,int xidx, uint8_t prevcursor);
 void *getScorePtr(options_t *options);
 
 /* ----------------------- Define all your functions here --------------------*/
@@ -159,7 +159,7 @@ void main_menu_loop(void) {
 				}
 				
 				if (kd) {
-					/*
+					///*
 					//Remove ability to select 2p modes by going up or down
 					//To be added back in when ways to do 2p is implemented
 					if (kd&kb_Up) {
@@ -170,7 +170,7 @@ void main_menu_loop(void) {
 						if (curopt>3) curopt-=6;
 						curopt += 2;
 					}
-					*/
+					//*/
 					if (kd&kb_Left) {
 						if (!(curopt&1)) curopt += 2;
 						curopt--;
@@ -188,7 +188,7 @@ void main_menu_loop(void) {
 				}
 				gfx_SetTextFGColor(FONT_WHITE);
 				gfx_PrintStringXY("menu",144,40);
-				/*
+				///*
 				for (i=0,y=96;i<6;y+=24) {
 					for(x=48;x<200;i++,x+=120) {
 						if (i==curopt) {
@@ -199,7 +199,8 @@ void main_menu_loop(void) {
 						}
 						gfx_PrintStringXY(gameselmenu2[i>>1],x+16,y);
 					}
-				} */
+				} //*/
+				/*
 				for (i=0,y=96;i<6;y+=24) {
 					for(x=48;x<200;i++,x+=120) {
 						if (i==curopt) {
@@ -212,6 +213,7 @@ void main_menu_loop(void) {
 						gfx_PrintStringXY(gameselmenu2[i>>1],x+16,y);
 					}
 				}
+				*/
 				break;
 			/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 			case GM_GAMEOPTIONS:
@@ -639,7 +641,7 @@ void drawScoreBG(void) {
 
 
 //use:          dx,y,i.j,curopt
-void dispCursor(x,y,yidx,xidx,prevcursor) {
+void dispCursor(int x, int y,int yidx,int xidx, uint8_t prevcursor) {
 	if (*gamecursorx1[yidx] == xidx && !(gamecursory1==yidx && main_timer&2)) {
 		if (yidx<2) gfx_RLETSprite_NoClip(p1sprite,x,y-8);
 		else        gfx_RLETSprite_NoClip(downarrow,x,y-8);
